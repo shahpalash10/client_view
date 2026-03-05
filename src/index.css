@@ -21,3 +21,64 @@ body {
     transform: translateY(0);
   }
 }
+
+.profile-card::before {
+  content: '';
+  position: absolute;
+  inset: 0;
+  border-radius: 32px;
+  background: radial-gradient(circle at top, rgba(14, 165, 233, 0.12), transparent 55%);
+  opacity: 0;
+  transition: opacity 220ms ease;
+}
+
+.profile-card:hover::before {
+  opacity: 1;
+}
+
+.hero-bubble {
+  position: absolute;
+  border-radius: 9999px;
+  filter: blur(10px);
+  opacity: 0.35;
+  animation: hero-bubble-float 18s ease-in-out infinite;
+}
+
+.hero-bubble--one {
+  width: 260px;
+  height: 260px;
+  top: -60px;
+  right: 6%;
+  background: radial-gradient(circle, rgba(255,255,255,0.55), transparent 70%);
+  animation-delay: 0s;
+}
+
+.hero-bubble--two {
+  width: 180px;
+  height: 180px;
+  bottom: 10%;
+  left: 12%;
+  background: radial-gradient(circle, rgba(125,211,252,0.6), transparent 70%);
+  animation-delay: -4s;
+}
+
+.hero-bubble--three {
+  width: 320px;
+  height: 320px;
+  bottom: -25%;
+  right: 28%;
+  background: radial-gradient(circle, rgba(248,250,252,0.45), transparent 65%);
+  animation-delay: -8s;
+}
+
+@keyframes hero-bubble-float {
+  0% {
+    transform: translate3d(0, 0, 0) scale(1);
+  }
+  50% {
+    transform: translate3d(15px, -25px, 0) scale(1.05);
+  }
+  100% {
+    transform: translate3d(0, 0, 0) scale(1);
+  }
+}

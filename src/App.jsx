@@ -269,43 +269,91 @@ export default function App() {
   return (
     <div className={stage === 'profiles' ? 'min-h-screen bg-gradient-to-br from-slate-50 via-white to-indigo-50/30 p-8' : 'min-h-screen bg-gradient-to-b from-white to-slate-100 p-4 md:p-8'}>
       {stage === 'profiles' && (
-        <main className="mx-auto grid w-full max-w-7xl gap-6 sm:grid-cols-2 xl:grid-cols-3">
-          {users.map((u, idx) => (
-            <button
-              key={u.userId}
-              type="button"
-              onClick={() => {
-                setSelectedUser(u.userId)
-                setStage('dashboard')
-              }}
-              className="profile-pop overflow-hidden rounded-3xl border border-slate-200 bg-white text-left shadow-[0_20px_50px_rgba(15,23,42,0.08)] transition-all hover:-translate-y-1 hover:shadow-[0_30px_70px_rgba(15,23,42,0.12)]"
-              style={{ animationDelay: `${idx * 50}ms` }}
-            >
-              <div className={`h-36 bg-gradient-to-r ${profileColors[idx % profileColors.length]}`} />
-              <div className="p-5">
-                <div className="mb-3 flex items-center justify-between">
-                  <h2 className="text-xl font-semibold text-slate-900">{u.name}</h2>
-                  <span className="rounded-full bg-slate-100 px-3 py-1 text-xs font-medium text-slate-600">Open</span>
-                </div>
-                <p className="mb-4 text-sm text-slate-500">{u.count} total sessions</p>
-                <div className="grid grid-cols-3 gap-2">
-                  <div className="rounded-xl bg-sky-50 p-2 text-center">
-                    <p className="text-xs text-slate-500">A</p>
-                    <p className="text-base font-semibold text-slate-900">{formatValue(u.preview.a)}</p>
-                  </div>
-                  <div className="rounded-xl bg-orange-50 p-2 text-center">
-                    <p className="text-xs text-slate-500">V</p>
-                    <p className="text-base font-semibold text-slate-900">{formatValue(u.preview.v)}</p>
-                  </div>
-                  <div className="rounded-xl bg-violet-50 p-2 text-center">
-                    <p className="text-xs text-slate-500">E</p>
-                    <p className="text-base font-semibold text-slate-900">{formatValue(u.preview.e)}</p>
-                  </div>
+        <section className="relative mx-auto w-full max-w-6xl px-2 pb-12">
+          <div className="relative overflow-hidden rounded-[44px] bg-gradient-to-br from-sky-600 via-indigo-600 to-cyan-500 px-8 py-12 text-white shadow-[0_30px_90px_rgba(14,37,102,0.35)]">
+            <div className="relative z-10 flex flex-col gap-8 md:flex-row md:items-end md:justify-between">
+              <div className="space-y-4">
+                <p className="text-xs uppercase tracking-[0.6em] text-white/70">Client Repository</p>
+                <h1 className="text-[clamp(2rem,5vw,3.8rem)] font-semibold leading-tight">Immersive Emotion Profiles</h1>
+                <p className="max-w-2xl text-base text-white/85">
+                  Where every capture session becomes a living story. Pick a profile to drop straight into their
+                  realtime dashboard, complete with face and voice mood trends.
+                </p>
+                <div className="flex flex-wrap items-center gap-3 text-sm text-white/80">
+                  <span className="inline-flex items-center gap-2 rounded-full border border-white/30 px-4 py-1.5">
+                    <span className="h-2 w-2 animate-pulse rounded-full bg-cyan-200" />
+                    {users.length} active profiles
+                  </span>
+                  <span className="inline-flex items-center gap-2 rounded-full border border-white/30 px-4 py-1.5">
+                    <span className="h-2 w-2 animate-ping rounded-full bg-white/70" />
+                    Live pipeline ready
+                  </span>
                 </div>
               </div>
-            </button>
-          ))}
-        </main>
+              <div className="rounded-[28px] bg-white/15 p-6 text-sm text-white/90 backdrop-blur">
+                <p className="text-xs uppercase tracking-[0.4em] text-white/70">Now streaming</p>
+                <p className="mt-3 text-3xl font-semibold">Face + Voice</p>
+                <p className="mt-2 text-white/75">Switch sources inside each session analysis panel.</p>
+              </div>
+            </div>
+
+            <div className="pointer-events-none">
+              <div className="hero-bubble hero-bubble--one" />
+              <div className="hero-bubble hero-bubble--two" />
+              <div className="hero-bubble hero-bubble--three" />
+            </div>
+          </div>
+
+          <div className="relative -mt-14 flex flex-wrap justify-center gap-8 rounded-[40px] bg-white/70 px-2 pb-6 pt-16 shadow-[0_35px_80px_rgba(15,23,42,0.15)] backdrop-blur">
+            {users.map((u, idx) => (
+              <button
+                key={u.userId}
+                type="button"
+                onClick={() => {
+                  setSelectedUser(u.userId)
+                  setStage('dashboard')
+                }}
+                className="profile-card group relative w-full max-w-sm overflow-hidden rounded-[32px] border border-white/40 bg-white/90 text-left shadow-[0_30px_60px_rgba(15,23,42,0.14)] transition-all hover:-translate-y-2 hover:border-cyan-200 hover:shadow-[0_35px_90px_rgba(15,23,42,0.2)]"
+                style={{ animationDelay: `${idx * 60}ms` }}
+              >
+                <div className={`h-40 bg-gradient-to-r ${profileColors[idx % profileColors.length]} relative overflow-hidden`}> 
+                  <span className="absolute inset-0 bg-[radial-gradient(circle_at_top,rgba(255,255,255,0.35),transparent_55%)]" />
+                  <span className="absolute -bottom-4 right-4 h-16 w-16 rounded-full bg-white/30 blur-2xl" />
+                </div>
+                <div className="space-y-4 p-6">
+                  <div className="flex items-center justify-between">
+                    <div>
+                      <h2 className="text-2xl font-semibold text-slate-900">{u.name}</h2>
+                      <p className="text-sm text-slate-500">{u.count} total sessions</p>
+                    </div>
+                    <span className="rounded-full bg-slate-100 px-3 py-1 text-xs font-medium text-slate-600">Open</span>
+                  </div>
+                  <div className="grid grid-cols-3 gap-3 text-center text-sm font-semibold text-slate-900">
+                    <div className="rounded-2xl bg-sky-50/90 p-3">
+                      <p className="text-xs font-medium text-slate-500">Arousal</p>
+                      <p className="text-lg">{formatValue(u.preview.a)}</p>
+                    </div>
+                    <div className="rounded-2xl bg-amber-50/90 p-3">
+                      <p className="text-xs font-medium text-slate-500">Valence</p>
+                      <p className="text-lg">{formatValue(u.preview.v)}</p>
+                    </div>
+                    <div className="rounded-2xl bg-violet-50/90 p-3">
+                      <p className="text-xs font-medium text-slate-500">Expectation</p>
+                      <p className="text-lg">{formatValue(u.preview.e)}</p>
+                    </div>
+                  </div>
+                  <div className="flex items-center justify-between text-xs text-slate-400">
+                    <span>Updated {u.latest ? new Date(u.latest).toLocaleDateString() : '—'}</span>
+                    <span className="flex items-center gap-1 text-slate-500">
+                      <span className="inline-block h-1.5 w-1.5 rounded-full bg-emerald-400" />
+                      Pipeline ready
+                    </span>
+                  </div>
+                </div>
+              </button>
+            ))}
+          </div>
+        </section>
       )}
 
       {stage === 'dashboard' && (
