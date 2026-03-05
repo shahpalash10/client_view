@@ -28,6 +28,15 @@ export const fetchAllSessions = async () => {
   }
 }
 
+export const fetchSessionsForUser = async (userId) => {
+  if (!userId) return []
+  try {
+    return await fetchJson(`/users/${userId}/sessions`)
+  } catch {
+    return []
+  }
+}
+
 export const fetchSessionById = async (sessionId) => {
   if (!sessionId) throw new Error('Missing session id')
 
