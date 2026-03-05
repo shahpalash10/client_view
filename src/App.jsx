@@ -257,7 +257,7 @@ export default function App() {
             </header>
 
             {/* ── Profile Cards Grid ── */}
-            <div className="mt-16 md:mt-20 lg:mt-24 flex flex-wrap justify-center gap-6 pb-24 transform translate-x-4 translate-y-2">
+            <div className="mt-16 md:mt-20 lg:mt-24 flex flex-wrap justify-center gap-6 pb-24 transform translate-x-8 md:translate-x-12 lg:translate-x-16 translate-y-2">
               {users.slice(0, 9).map((u, idx) => (
                 <button
                   key={u.userId}
