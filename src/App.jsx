@@ -1,554 +1,645 @@
-import { useEffect, useMemo, useState } from 'react'
-import {
-  ResponsiveContainer,
-  LineChart,
-  Line,
-  CartesianGrid,
-  XAxis,
-  YAxis,
-  Tooltip,
-  Legend
-} from 'recharts'
-import { fetchAllSessions, fetchSessionById, fetchSessionsForUser } from './api'
+import { useEffect, useRef, useState } from 'react';
+import EEGCapture from './components/EEGCapture';
+import WebRTCClient from './components/WebRTCClient';
+import PredictionDisplay from './components/PredictionDisplay';
+import ProfileManager from './components/ProfileManager';
+import CalibrationMode from './components/CalibrationMode';
+import PCAInspector from './components/PCAInspector';
+import FeatureImportance from './components/FeatureImportance';
+import { profileStorage } from './utils/profileStorage';
+import logo from './work10.png';
+import { useLanguage } from './context/LanguageContext';
+import './NewApp.css';
 
-const formatValue = (v) => (Number.isFinite(v) ? v.toFixed(2) : '-')
+const PCA_DIMENSIONS = ['arousal', 'valence', 'expectation'];
 
-const parseTime = (value) => {
-  const d = new Date(value)
-  return Number.isNaN(d.getTime()) ? null : d
-}
+// ... (utility functions like buildPcaSignature, selectCalibrationSamples, etc. remain the same)
+const buildPcaSignature = (samples = []) => {
+  if (!samples.length) return null
 
-const niceTime = (value) => {
-  const d = parseTime(value)
-  if (!d) return '--:--:--'
-  return d.toLocaleTimeString([], { hour12: false })
-}
+  const signature = {}
 
-const profileColors = [
-  'from-cyan-500 to-blue-600',
-  'from-fuchsia-500 to-violet-600',
-  'from-emerald-500 to-teal-600',
-  'from-orange-500 to-amber-600',
-  'from-sky-500 to-indigo-600',
-  'from-rose-500 to-pink-600'
-]
+  PCA_DIMENSIONS.forEach(dimension => {
+    const contributions = {}
+    let total = 0
 
-const dayMs = 24 * 60 * 60 * 1000
+    samples.forEach(sample => {
+      const entries = sample.featureImportance?.[dimension] || []
+      entries.forEach(entry => {
+        const component = Number(entry.component)
+        const contribution = Number(entry.contribution)
+        if (!Number.isFinite(component) || !Number.isFinite(contribution) || contribution <= 0) return
+        contributions[component] = (contributions[component] || 0) + contribution
+        total += contribution
+      })
+    })
 
-const mapPoint = (m, source) => {
-  const ts = parseTime(m?.timestamp || m?.createdAt || m?.time)
-  if (!ts) return null
-
-  const a = Number(source === 'voice' ? (m?.arousal ?? m?.avgArousal) : (m?.avgArousal ?? m?.arousal))
-  const v = Number(source === 'voice' ? (m?.valence ?? m?.avgValence) : (m?.avgValence ?? m?.valence))
-  const e = Number(source === 'voice' ? (m?.expectation ?? m?.avgExpectation) : (m?.avgExpectation ?? m?.expectation))
-
-  return {
-    ts: ts.getTime(),
-    t: ts.toLocaleTimeString([], { hour12: false }),
-    a: Number.isFinite(a) ? a : null,
-    v: Number.isFinite(v) ? v : null,
-    e: Number.isFinite(e) ? e : null
-  }
-}
-
-export default function App() {
-  const [stage, setStage] = useState('profiles')
-  const [loading, setLoading] = useState(true)
-  const [users, setUsers] = useState([])
-  const [selectedUser, setSelectedUser] = useState('')
-  const [userSessions, setUserSessions] = useState([])
-  const [selectedSession, setSelectedSession] = useState('')
-  const [sessionDetail, setSessionDetail] = useState(null)
-  const [trendMode, setTrendMode] = useState('weekly')
-  const [signalType, setSignalType] = useState('face')
-  const [analysisView, setAnalysisView] = useState('')
-  const [selectedDate, setSelectedDate] = useState(() => {
-    const d = new Date()
-    d.setHours(0, 0, 0, 0)
-    return d
+    if (total > 0) {
+      signature[dimension] = Object.entries(contributions)
+        .map(([component, weight]) => ({
+          component: Number(component),
+          weight: weight / total
+        }))
+        .sort((a, b) => b.weight - a.weight)
+        .slice(0, 5)
+    }
   })
 
-  useEffect(() => {
-    let live = true
+  return Object.keys(signature).length ? signature : null
+}
 
-    ;(async () => {
-      setLoading(true)
-      const sessions = await fetchAllSessions()
-      const grouped = new Map()
-      const now = Date.now()
+const selectCalibrationSamples = (samples = [], emotion) => {
+    if (!samples.length) return samples;
+    if (samples.length < 12) return samples;
 
-      sessions.forEach((s) => {
-        const userId = s.userId || 'unknown'
-        const started = parseTime(s.startedAt)
-        const latest = s.latestMetrics || null
+    const sortedByArousal = [...samples].sort((a, b) => a.arousal - b.arousal);
+    const portion = Math.max(6, Math.round(sortedByArousal.length * 0.4));
 
-        const current = grouped.get(userId) || {
-          userId,
-          name: s.profileName || userId,
-          count: 0,
-          latest: s.startedAt,
-          weeklyCount: 0,
-          weeklyA: 0,
-          weeklyV: 0,
-          weeklyE: 0
-        }
-
-        current.count += 1
-        if (!current.latest || (started && new Date(current.latest) < started)) {
-          current.latest = s.startedAt
-        }
-
-        if (started && now - started.getTime() <= 7 * dayMs && latest) {
-          current.weeklyCount += 1
-          current.weeklyA += Number(latest.avgArousal ?? 0)
-          current.weeklyV += Number(latest.avgValence ?? 0)
-          current.weeklyE += Number(latest.avgExpectation ?? 0)
-        }
-
-        grouped.set(userId, current)
-      })
-
-      if (!live) return
-
-      const list = Array.from(grouped.values())
-        .map((u) => ({
-          ...u,
-          preview: {
-            a: u.weeklyCount ? u.weeklyA / u.weeklyCount : null,
-            v: u.weeklyCount ? u.weeklyV / u.weeklyCount : null,
-            e: u.weeklyCount ? u.weeklyE / u.weeklyCount : null
-          }
-        }))
-        .sort((a, b) => b.count - a.count)
-
-      setUsers(list)
-      setLoading(false)
-    })()
-
-    return () => {
-      live = false
+    if (emotion === 'happy') {
+        return sortedByArousal.slice(-portion);
     }
+
+    if (emotion === 'sad') {
+        return sortedByArousal.slice(0, portion);
+    }
+
+    // Neutral: keep middle band near median arousal
+    const medianIndex = Math.floor(sortedByArousal.length / 2);
+    const medianArousal = sortedByArousal[medianIndex].arousal;
+    const tolerance = 5;
+    const neutralBand = samples.filter(sample => Math.abs(sample.arousal - medianArousal) <= tolerance);
+    return neutralBand.length >= 6 ? neutralBand : samples;
+};
+
+
+const asNumber = (value) => (Number.isFinite(value) ? value : null)
+
+const diffMs = (start, end) => (
+  Number.isFinite(start) && Number.isFinite(end) ? Math.max(0, end - start) : null
+)
+
+const formatTimestampMs = (value) => {
+  if (!Number.isFinite(value)) return '-'
+  const date = new Date(value)
+  return `${date.toLocaleTimeString([], { hour12: false })}.${String(value % 1000).padStart(3, '0')}`
+}
+
+const normalizeTimingEvent = (event = {}) => {
+  const localUpload = asNumber(event.local_upload_send_ms)
+  const cloudReceived = asNumber(event.cloud_received_ms)
+  const cloudStart = asNumber(event.cloud_compute_start_ms)
+  const cloudEnd = asNumber(event.cloud_compute_end_ms)
+  const cloudSend = asNumber(event.cloud_download_send_ms)
+  const localReceived = asNumber(event.local_download_received_ms)
+  const decodeStart = asNumber(event.local_decode_start_ms)
+  const decodeEnd = asNumber(event.local_decode_end_ms)
+  const drawStart = asNumber(event.drawing_start_ms)
+  const drawEnd = asNumber(event.drawing_end_ms)
+
+  return {
+    packetId: event.packetId || null,
+    timeline_ms: {
+      local_upload_send_ms: localUpload,
+      cloud_received_ms: cloudReceived,
+      cloud_compute_start_ms: cloudStart,
+      cloud_compute_end_ms: cloudEnd,
+      cloud_download_send_ms: cloudSend,
+      local_download_received_ms: localReceived,
+      local_decode_start_ms: decodeStart,
+      local_decode_end_ms: decodeEnd,
+      drawing_start_ms: drawStart,
+      drawing_end_ms: drawEnd
+    },
+    timeline_readable: {
+      local_upload_send: formatTimestampMs(localUpload),
+      cloud_received: formatTimestampMs(cloudReceived),
+      cloud_compute_start: formatTimestampMs(cloudStart),
+      cloud_compute_end: formatTimestampMs(cloudEnd),
+      cloud_download_send: formatTimestampMs(cloudSend),
+      local_download_received: formatTimestampMs(localReceived),
+      local_decode_start: formatTimestampMs(decodeStart),
+      local_decode_end: formatTimestampMs(decodeEnd),
+      drawing_start: formatTimestampMs(drawStart),
+      drawing_end: formatTimestampMs(drawEnd)
+    },
+    durations_ms: {
+      cloud_compute_ms: diffMs(cloudStart, cloudEnd),
+      cloud_pipeline_ms: diffMs(cloudReceived, cloudSend),
+      local_decode_ms: diffMs(decodeStart, decodeEnd),
+      local_draw_ms: diffMs(drawStart, drawEnd),
+      local_post_download_to_draw_ms: diffMs(localReceived, drawEnd),
+      client_end_to_end_ms: diffMs(localUpload, drawEnd)
+    }
+  }
+}
+
+
+function App() {
+  const [sessionActive, setSessionActive] = useState(false)
+  const [eegData, setEegData] = useState(null)
+  const [predictions, setPredictions] = useState([])
+  const [voicePredictions, setVoicePredictions] = useState([])
+  const [connectionState, setConnectionState] = useState('idle')
+  const [sessionId, setSessionId] = useState(null)
+  const [pcaLoadings, setPcaLoadings] = useState(null)
+  const [selectedComponent, setSelectedComponent] = useState(null)
+  const [activeProfile, setActiveProfile] = useState(null)
+  const [calibrationMode, setCalibrationMode] = useState(false)
+  const [calibrationProfile, setCalibrationProfile] = useState(null)
+  const [calibrationData, setCalibrationData] = useState({})
+  const [isCollectingCalibration, setIsCollectingCalibration] = useState(false)
+  const [currentCalibrationEmotion, setCurrentCalibrationEmotion] = useState(null)
+  const [calibrationSampleCounts, setCalibrationSampleCounts] = useState({})
+  const [voiceCalibrationSampleCounts, setVoiceCalibrationSampleCounts] = useState({})
+  const [calibrationStreamReady, setCalibrationStreamReady] = useState(false)
+  const [sessionError, setSessionError] = useState(null)
+  const [voiceCaptureActive, setVoiceCaptureActive] = useState(false)
+  const [timingEvents, setTimingEvents] = useState([])
+  const [latestTiming, setLatestTiming] = useState(null)
+  const [activeView, setActiveView] = useState('dashboard');
+
+  const calibrationBuffersRef = useRef({})
+  const voiceCalibrationBuffersRef = useRef({})
+  const calibrationActiveRef = useRef(false)
+  const currentCalibrationEmotionRef = useRef(null)
+  const calibrationDataRef = useRef({})
+  const { t, language, toggleLanguage } = useLanguage()
+
+  useEffect(() => {
+      calibrationActiveRef.current = isCollectingCalibration
+    }, [isCollectingCalibration])
+
+    useEffect(() => {
+      currentCalibrationEmotionRef.current = currentCalibrationEmotion
+    }, [currentCalibrationEmotion])
+
+  useEffect(() => {
+    // Load active profile on mount
+    const profile = profileStorage.getActiveProfile()
+    if (profile && profile.isCalibrated) {
+      setActiveProfile(profile)
+    }
+    // Fetch PCA loadings for inspector
+    const signalingServer = import.meta.env.VITE_SIGNALING_URL || 'http://localhost:8080'
+    fetch(`${signalingServer}/api/pca-loadings`)
+      .then(res => res.json())
+      .then(data => setPcaLoadings(data))
+      .catch(err => console.error('Failed to fetch PCA loadings', err))
   }, [])
 
-  useEffect(() => {
-    if (!selectedUser) return
-    let live = true
-
-    ;(async () => {
-      const list = await fetchSessionsForUser(selectedUser)
-      if (!live) return
-      setUserSessions(list)
-      setSelectedSession(list[0]?.id || '')
-      setSessionDetail(null)
-      setAnalysisView('')
-    })()
-
-    return () => {
-      live = false
-    }
-  }, [selectedUser])
-
-  useEffect(() => {
-    if (!selectedSession) return
-
-    let cancelled = false
-
-    const load = async () => {
-      try {
-        const detail = await fetchSessionById(selectedSession)
-        if (cancelled) return
-        setSessionDetail(detail)
-      } catch {
-        if (!cancelled) setSessionDetail(null)
-      }
-    }
-
-    load()
-    const timer = setInterval(load, 1000)
-    return () => {
-      cancelled = true
-      clearInterval(timer)
-    }
-  }, [selectedSession])
-
-  useEffect(() => {
-    setSignalType('face')
-    setAnalysisView('')
-  }, [selectedSession])
-
-  const hasVoiceData = (sessionDetail?.voiceMetrics?.length || 0) > 0
-
-  const chartData = useMemo(() => {
-    if (!sessionDetail) return []
-
-    const sourceMetrics = signalType === 'voice'
-      ? (sessionDetail.voiceMetrics || [])
-      : (sessionDetail.metrics || [])
-
-    const metrics = sourceMetrics
-      .map((m) => mapPoint(m, signalType))
-      .filter(Boolean)
-
-    if (!metrics.length) return []
-
-    if (trendMode === 'daily') {
-      const start = selectedDate.getTime()
-      const end = start + dayMs
-      return metrics
-        .filter((m) => m.ts >= start && m.ts < end)
-        .sort((a, b) => a.ts - b.ts)
-        .slice(-300)
-    }
-
-    const pts = []
-    for (let i = 6; i >= 0; i--) {
-      const dayStart = selectedDate.getTime() - i * dayMs
-      const dayEnd = dayStart + dayMs
-      const dayMetrics = metrics.filter((m) => m.ts >= dayStart && m.ts < dayEnd)
-      if (dayMetrics.length) {
-        const total = dayMetrics.reduce(
-          (acc, m) => ({
-            a: acc.a + (Number.isFinite(m.a) ? m.a : 0),
-            v: acc.v + (Number.isFinite(m.v) ? m.v : 0),
-            e: acc.e + (Number.isFinite(m.e) ? m.e : 0)
-          }),
-          { a: 0, v: 0, e: 0 }
-        )
-        pts.push({
-          ts: dayStart,
-          t: new Date(dayStart).toLocaleDateString([], { month: 'short', day: 'numeric' }),
-          a: total.a / dayMetrics.length,
-          v: total.v / dayMetrics.length,
-          e: total.e / dayMetrics.length
-        })
-      } else {
-        pts.push({
-          ts: dayStart,
-          t: new Date(dayStart).toLocaleDateString([], { month: 'short', day: 'numeric' }),
-          a: null,
-          v: null,
-          e: null
-        })
-      }
-    }
-
-    return pts
-  }, [sessionDetail, signalType, trendMode, selectedDate])
-
-  const latestPoint = chartData[chartData.length - 1] || { a: 0, v: 0, e: 0 }
-
-  const avg = useMemo(() => {
-    if (!chartData.length) return { a: 0, v: 0, e: 0, peakV: 0 }
-    const numeric = chartData.filter((p) => Number.isFinite(p.a) || Number.isFinite(p.v) || Number.isFinite(p.e))
-    if (!numeric.length) return { a: 0, v: 0, e: 0, peakV: 0 }
-    const total = numeric.reduce(
-      (acc, p) => ({
-        a: acc.a + (Number.isFinite(p.a) ? p.a : 0),
-        v: acc.v + (Number.isFinite(p.v) ? p.v : 0),
-        e: acc.e + (Number.isFinite(p.e) ? p.e : 0)
-      }),
-      { a: 0, v: 0, e: 0 }
-    )
-    return {
-      a: total.a / numeric.length,
-      v: total.v / numeric.length,
-      e: total.e / numeric.length,
-      peakV: Math.max(...numeric.map((p) => (Number.isFinite(p.v) ? p.v : -Infinity))) || 0
-    }
-  }, [chartData])
-
-  if (loading) {
-    return (
-      <div className="min-h-screen bg-gradient-to-br from-slate-50 via-white to-indigo-50/40 flex items-center justify-center p-8">
-        <div className="h-10 w-64 animate-pulse rounded-2xl bg-slate-200/80" />
-      </div>
-    )
+  const handleProfileSelected = (profile) => {
+    setActiveProfile(profile)
+    setSessionError(null)
   }
 
+  const handleStartCalibration = (profile) => {
+    setCalibrationProfile(profile)
+    setCalibrationMode(true)
+    setCalibrationData({})
+    setVoiceCalibrationSampleCounts({})
+    setCalibrationStreamReady(false)
+    calibrationDataRef.current = {}
+    voiceCalibrationBuffersRef.current = {}
+    
+    // Start a calibration session with a unique ID
+    const calibrationSessionId = `calibration_${Date.now()}`
+    setSessionId(calibrationSessionId)
+    setSessionActive(true) // Activate session to start WebRTC
+    setPredictions([]) // Clear previous predictions
+    setVoicePredictions([])
+  }
+
+  const handleCalibrationComplete = () => {
+    // Use ref to ensure we have the latest finalized calibration data
+    const latestData = calibrationDataRef.current
+    console.log('📊 Calibration data to save:', latestData)
+    const hasAllStates = ['neutral', 'happy', 'sad'].every(emotion => latestData[emotion])
+    
+    if (calibrationProfile && hasAllStates) {
+      const updatedProfile = profileStorage.saveCalibration(calibrationProfile.userId, latestData)
+      console.log('✅ Updated profile:', updatedProfile)
+      console.log('📍 Reference points:', updatedProfile.referencePoints)
+      
+      setActiveProfile(updatedProfile)
+      setCalibrationMode(false)
+      setCalibrationProfile(null)
+      setCalibrationData({})
+      setCalibrationStreamReady(false)
+      calibrationDataRef.current = {}
+
+      // If a session is active, push FULL calibration to backend so it applies immediately
+      if (sessionId) {
+        const signalingServer = import.meta.env.VITE_SIGNALING_URL || 'http://localhost:8080'
+        fetch(`${signalingServer}/api/set-thresholds`, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ 
+            sessionId, 
+            calibration: updatedProfile.referencePoints,  // Send full reference points
+            thresholds: updatedProfile.thresholds  // Legacy fallback
+          })
+        }).then(res => res.json())
+          .then(data => console.log('✅ Calibration applied to backend:', data))
+          .catch(err => console.error('❌ Failed to push calibration to server', err))
+      }
+    } else {
+      console.error('❌ Calibration incomplete:', {
+        hasProfile: !!calibrationProfile,
+        dataKeys: Object.keys(latestData),
+        calibrationData: latestData
+      })
+    }
+  }
+
+  const handleCalibrationCancel = () => {
+    setCalibrationMode(false)
+    setCalibrationProfile(null)
+    setCalibrationData({})
+    setVoiceCalibrationSampleCounts({})
+    voiceCalibrationBuffersRef.current = {}
+    setCalibrationStreamReady(false)
+    calibrationDataRef.current = {}
+    voiceCalibrationBuffersRef.current = {}
+    setIsCollectingCalibration(false)
+    setCurrentCalibrationEmotion(null)
+    setVoicePredictions([])
+    
+    // Stop the calibration session
+    setSessionActive(false)
+    setConnectionState('idle')
+    setPredictions([])
+    setVoicePredictions([])
+  }
+
+  const handleCalibrationDataCollection = (emotion, isStarting) => {
+    if (isStarting) {
+      // Start collecting data for this emotion
+      console.log(`🎬 Starting collection for ${emotion}`)
+      setIsCollectingCalibration(true)
+      setCurrentCalibrationEmotion(emotion)
+      setCalibrationData(prev => {
+        const next = { ...prev }
+        delete next[emotion]
+        calibrationDataRef.current = next
+        return next
+      })
+      calibrationBuffersRef.current = {
+        ...calibrationBuffersRef.current,
+        [emotion]: []
+      }
+      voiceCalibrationBuffersRef.current = {
+        ...voiceCalibrationBuffersRef.current,
+        [emotion]: []
+      }
+      setCalibrationSampleCounts(prev => ({
+        ...prev,
+        [emotion]: 0
+      }))
+      setVoiceCalibrationSampleCounts(prev => ({
+        ...prev,
+        [emotion]: 0
+      }))
+      return
+    }
+
+    // Stop collecting and calculate averages using the *latest* state
+    setIsCollectingCalibration(false)
+
+    const faceData = calibrationBuffersRef.current[emotion] || []
+    const voiceData = voiceCalibrationBuffersRef.current[emotion] || []
+    console.log(`🛑 Stopping collection for ${emotion}, collected face ${faceData.length} / voice ${voiceData.length}`)
+
+    let averaged = null
+    if (faceData.length) {
+      const selectedSamples = selectCalibrationSamples(faceData, emotion)
+      if (selectedSamples.length !== faceData.length) {
+        console.log(`🎯 Using ${selectedSamples.length}/${faceData.length} face samples for ${emotion}`)
+      }
+
+      const avgArousal = selectedSamples.reduce((sum, p) => sum + p.arousal, 0) / selectedSamples.length
+      const avgValence = selectedSamples.reduce((sum, p) => sum + p.valence, 0) / selectedSamples.length
+      const avgExpectation = selectedSamples.reduce((sum, p) => sum + p.expectation, 0) / selectedSamples.length
+      const pcaSignature = buildPcaSignature(selectedSamples)
+
+      averaged = {
+        arousal: avgArousal,
+        valence: avgValence,
+        expectation: avgExpectation
+      }
+
+      if (pcaSignature) {
+        averaged.pcaSignature = pcaSignature
+        console.log(`🧬 PCA signature for ${emotion}:`, pcaSignature)
+      }
+    }
+
+    if (voiceData.length) {
+      const selectedVoice = selectCalibrationSamples(voiceData, emotion)
+      if (selectedVoice.length !== voiceData.length) {
+        console.log(`🔊 Using ${selectedVoice.length}/${voiceData.length} voice samples for ${emotion}`)
+      }
+      const voiceAvgArousal = selectedVoice.reduce((sum, p) => sum + p.arousal, 0) / selectedVoice.length
+      const voiceAvgValence = selectedVoice.reduce((sum, p) => sum + p.valence, 0) / selectedVoice.length
+      const voiceAvgExpectation = selectedVoice.reduce((sum, p) => sum + p.expectation, 0) / selectedVoice.length
+      if (!averaged) averaged = { arousal: 0, valence: 0, expectation: 0 }
+      averaged.voice = {
+        arousal: voiceAvgArousal,
+        valence: voiceAvgValence,
+        expectation: voiceAvgExpectation
+      }
+    }
+
+    if (averaged) {
+      console.log(`📊 Averaged ${emotion}:`, averaged)
+      setCalibrationData(prev => {
+        const next = {
+          ...prev,
+          [emotion]: averaged
+        }
+        calibrationDataRef.current = next
+        return next
+      })
+    } else {
+      console.warn(`⚠️ No data collected for ${emotion}`)
+    }
+
+    setCurrentCalibrationEmotion(null)
+  }
+
+  const inviteLink = sessionId 
+    ? `${window.location.origin}?session=${sessionId}`
+    : null
+
+  const handleStartSession = () => {
+    if (!activeProfile || !activeProfile.isCalibrated) {
+      setSessionError(t('app.errors.profileRequired'))
+      return
+    }
+    const newSessionId = `session_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`
+    setSessionError(null)
+    setConnectionState('idle')
+    setSessionId(newSessionId)
+    setSessionActive(true)
+    setPredictions([])
+    setVoicePredictions([])
+  }
+
+  const handleStopSession = async () => {
+    // Call backend to explicitly stop the session
+    if (sessionId) {
+      try {
+        const signalingServer = import.meta.env.VITE_SIGNALING_URL || 'http://localhost:8080'
+        await fetch(`${signalingServer}/api/stop-session`, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ sessionId })
+        })
+        console.log('✅ Session stopped on backend')
+      } catch (error) {
+        console.error('❌ Failed to stop session on backend:', error)
+      }
+    }
+    
+    setSessionActive(false)
+    setConnectionState('idle')
+    setSessionError(null)
+    setPredictions([])
+    setVoicePredictions([])
+  }
+
+  const handleEEGData = (data) => {
+    setEegData(data)
+  }
+
+  const handlePrediction = (prediction) => {
+    if (!prediction) return
+
+    // Always log incoming predictions for debugging
+    console.log('📨 Received prediction:', prediction)
+
+    const nowMs = Date.now()
+    const timing = prediction?.metadata?.timing || {}
+    const eventRecord = {
+      packetId: prediction.packetId || null,
+      local_upload_send_ms: timing.local_upload_send_ms ?? null,
+      cloud_received_ms: timing.cloud_received_ms ?? null,
+      cloud_compute_start_ms: timing.cloud_compute_start_ms ?? null,
+      cloud_compute_end_ms: timing.cloud_compute_end_ms ?? null,
+      cloud_download_send_ms: timing.cloud_download_send_ms ?? null,
+      local_download_received_ms: timing.local_download_received_ms ?? nowMs,
+      local_decode_start_ms: timing.local_decode_start_ms ?? null,
+      local_decode_end_ms: timing.local_decode_end_ms ?? null,
+      drawing_start_ms: null,
+      drawing_end_ms: null
+    }
+
+    requestAnimationFrame(() => {
+      const drawingStartMs = Date.now()
+      requestAnimationFrame(() => {
+        const drawingEndMs = Date.now()
+        const finalized = {
+          ...eventRecord,
+          drawing_start_ms: drawingStartMs,
+          drawing_end_ms: drawingEndMs
+        }
+        setLatestTiming(finalized)
+        setTimingEvents(prev => [...prev, finalized].slice(-200))
+      })
+    })
+
+    if (calibrationMode && !calibrationStreamReady) {
+      setCalibrationStreamReady(true)
+    }
+
+    // If collecting calibration data, store it in mutable buffer (avoids stale state)
+    if (calibrationActiveRef.current && currentCalibrationEmotionRef.current) {
+      const emotion = currentCalibrationEmotionRef.current
+      const buffer = calibrationBuffersRef.current[emotion] || []
+      buffer.push({
+        arousal: prediction.arousal,
+        valence: prediction.valence,
+        expectation: prediction.expectation,
+        featureImportance: prediction.feature_importance || null
+      })
+      calibrationBuffersRef.current[emotion] = buffer
+      setCalibrationSampleCounts(prev => ({
+        ...prev,
+        [emotion]: buffer.length
+      }))
+      console.log(`📥 Collecting ${emotion}: sample #${buffer.length}`)
+    }
+
+    // Always update predictions display
+    setPredictions(prev => {
+      const updated = [...prev, prediction]
+      return updated.slice(-100)
+    })
+  }
+
+  const handleVoicePrediction = (prediction) => {
+    if (calibrationMode && !calibrationStreamReady) {
+      setCalibrationStreamReady(true)
+    }
+
+    if (calibrationActiveRef.current && currentCalibrationEmotionRef.current) {
+      const emotion = currentCalibrationEmotionRef.current
+      const buffer = voiceCalibrationBuffersRef.current[emotion] || []
+      buffer.push({
+        arousal: prediction.arousal,
+        valence: prediction.valence,
+        expectation: prediction.expectation
+      })
+      voiceCalibrationBuffersRef.current[emotion] = buffer
+      setVoiceCalibrationSampleCounts(prev => ({
+        ...prev,
+        [emotion]: buffer.length
+      }))
+    }
+
+    setVoicePredictions(prev => {
+      const updated = [...prev, prediction]
+      return updated.slice(-100)
+    })
+  }
+
+  const downloadTimingLogs = () => {
+    if (!timingEvents.length) return
+    const normalizedLogs = timingEvents.map(normalizeTimingEvent)
+    const exportPayload = {
+      sessionId,
+      exportedAt: new Date().toISOString(),
+      totalEvents: normalizedLogs.length,
+      events: normalizedLogs
+    }
+    const blob = new Blob([JSON.stringify(exportPayload, null, 2)], { type: 'application/json' })
+    const url = URL.createObjectURL(blob)
+    const anchor = document.createElement('a')
+    anchor.href = url
+    anchor.download = `timing-logs-${sessionId || 'session'}-${Date.now()}.json`
+    document.body.appendChild(anchor)
+    anchor.click()
+    anchor.remove()
+    URL.revokeObjectURL(url)
+  }
+
+  const copyInviteLink = () => {
+    if (inviteLink) {
+      navigator.clipboard.writeText(inviteLink)
+      // Add feedback to user
+    }
+  }
+
+  const profileMetadata = activeProfile ? {
+    userId: activeProfile.userId,
+    name: activeProfile.name || activeProfile.userId,
+    profileId: activeProfile.userId,
+    profileName: activeProfile.name || activeProfile.userId,
+    sessionType: calibrationMode ? 'calibration' : 'realtime'
+  } : {
+    userId: 'guest',
+    name: 'Guest',
+    profileId: 'guest'
+  }
+
+  const renderContent = () => {
+    switch (activeView) {
+      case 'dashboard':
+        return (
+          <div>
+            <PredictionDisplay
+              predictions={predictions}
+              connectionState={connectionState}
+              activeThresholds={activeProfile ? activeProfile.thresholds : null}
+              voicePredictions={voicePredictions}
+              voiceCaptureActive={voiceCaptureActive}
+            />
+            <EEGCapture
+              active={sessionActive || calibrationMode}
+              onDataUpdate={handleEEGData}
+              pcaLoadings={pcaLoadings}
+              selectedComponent={selectedComponent}
+            />
+          </div>
+        );
+      case 'analysis':
+        return (
+          <div>
+            <FeatureImportance
+              latestPrediction={predictions.length > 0 ? predictions[predictions.length - 1] : null}
+              pcaLoadings={pcaLoadings}
+            />
+            <PCAInspector
+              onSelectComponent={setSelectedComponent}
+              selectedComponent={selectedComponent}
+              pcaLoadings={pcaLoadings}
+            />
+          </div>
+        );
+      case 'profiles':
+        return (
+          <ProfileManager
+            onProfileSelected={handleProfileSelected}
+            onStartCalibration={handleStartCalibration}
+          />
+        );
+      default:
+        return <div>Dashboard</div>;
+    }
+  };
+
   return (
-    <div className={stage === 'profiles' ? 'min-h-screen bg-gradient-to-br from-slate-50 via-white to-indigo-50/30 p-8' : 'min-h-screen bg-gradient-to-b from-white to-slate-100 p-4 md:p-8'}>
-      {stage === 'profiles' && (
-        <section className="relative mx-auto w-full max-w-6xl px-2 pb-12">
-          <div className="relative overflow-hidden rounded-[40px] bg-gradient-to-br from-sky-600 via-indigo-600 to-cyan-500 px-8 py-10 text-white shadow-[0_25px_80px_rgba(14,37,102,0.28)]">
-            <div className="relative z-10 mx-auto max-w-3xl space-y-4 text-center md:text-left">
-              <p className="text-[0.7rem] uppercase tracking-[0.55em] text-white/70">Client Repository</p>
-              <h1 className="text-[clamp(2.25rem,4vw,3.5rem)] font-semibold leading-tight text-white">
-                Immersive Emotion Profiles
-              </h1>
-              <p className="text-base text-white/80">
-                Face + voice mood snapshots, one tap away.
-              </p>
-            </div>
+    <div className="dashboard-layout">
+      <div className="sidebar">
+        <img src={logo} alt="Logo" style={{width: '100px', marginBottom: '20px'}} />
+        <button onClick={() => setActiveView('dashboard')}>Dashboard</button>
+        <button onClick={() => setActiveView('analysis')}>Analysis</button>
+        <button onClick={() => setActiveView('profiles')}>Profiles</button>
+        <div style={{marginTop: 'auto'}}>
+          {!sessionActive ? (
+            <button onClick={handleStartSession}>Start Session</button>
+          ) : (
+            <button onClick={handleStopSession}>Stop Session</button>
+          )}
+          <p>Status: {connectionState}</p>
+        </div>
+      </div>
+      <div className="main-content">
+        {renderContent()}
+      </div>
 
-            <div className="pointer-events-none">
-              <div className="hero-bubble hero-bubble--one" />
-              <div className="hero-bubble hero-bubble--two" />
-              <div className="hero-bubble hero-bubble--three" />
-            </div>
-          </div>
-
-          <div className="relative -mt-10 flex flex-wrap justify-center gap-8 rounded-[40px] bg-white/70 px-2 pb-6 pt-16 shadow-[0_35px_80px_rgba(15,23,42,0.15)] backdrop-blur">
-            {users.map((u, idx) => (
-              <button
-                key={u.userId}
-                type="button"
-                onClick={() => {
-                  setSelectedUser(u.userId)
-                  setStage('dashboard')
-                }}
-                className="profile-card group relative w-full max-w-sm overflow-hidden rounded-[32px] border border-white/40 bg-white/90 text-left shadow-[0_30px_60px_rgba(15,23,42,0.14)] transition-all hover:-translate-y-2 hover:border-cyan-200 hover:shadow-[0_35px_90px_rgba(15,23,42,0.2)]"
-                style={{ animationDelay: `${idx * 60}ms` }}
-              >
-                <div className={`h-40 bg-gradient-to-r ${profileColors[idx % profileColors.length]} relative overflow-hidden`}> 
-                  <span className="absolute inset-0 bg-[radial-gradient(circle_at_top,rgba(255,255,255,0.35),transparent_55%)]" />
-                  <span className="absolute -bottom-4 right-4 h-16 w-16 rounded-full bg-white/30 blur-2xl" />
-                </div>
-                <div className="space-y-4 p-6">
-                  <div className="flex items-center justify-between">
-                    <div>
-                      <h2 className="text-2xl font-semibold text-slate-900">{u.name}</h2>
-                      <p className="text-sm text-slate-500">{u.count} total sessions</p>
-                    </div>
-                    <span className="rounded-full bg-slate-100 px-3 py-1 text-xs font-medium text-slate-600">Open</span>
-                  </div>
-                  <div className="grid grid-cols-3 gap-3 text-center text-sm font-semibold text-slate-900">
-                    <div className="rounded-2xl bg-sky-50/90 p-3">
-                      <p className="text-xs font-medium text-slate-500">Arousal</p>
-                      <p className="text-lg">{formatValue(u.preview.a)}</p>
-                    </div>
-                    <div className="rounded-2xl bg-amber-50/90 p-3">
-                      <p className="text-xs font-medium text-slate-500">Valence</p>
-                      <p className="text-lg">{formatValue(u.preview.v)}</p>
-                    </div>
-                    <div className="rounded-2xl bg-violet-50/90 p-3">
-                      <p className="text-xs font-medium text-slate-500">Expectation</p>
-                      <p className="text-lg">{formatValue(u.preview.e)}</p>
-                    </div>
-                  </div>
-                  <div className="flex items-center justify-between text-xs text-slate-400">
-                    <span>Updated {u.latest ? new Date(u.latest).toLocaleDateString() : '—'}</span>
-                    <span className="flex items-center gap-1 text-slate-500">
-                      <span className="inline-block h-1.5 w-1.5 rounded-full bg-emerald-400" />
-                      Pipeline ready
-                    </span>
-                  </div>
-                </div>
-              </button>
-            ))}
-          </div>
-        </section>
+      {sessionActive && (
+        <WebRTCClient
+          sessionId={sessionId}
+          eegData={eegData}
+          onPrediction={handlePrediction}
+          onVoicePrediction={handleVoicePrediction}
+          onVoiceActivity={setVoiceCaptureActive}
+          onConnectionStateChange={setConnectionState}
+          profileCalibration={activeProfile?.referencePoints || null}
+          profileThresholds={activeProfile?.thresholds || null}
+          profileMetadata={profileMetadata}
+          enableVoice={true}
+          onBlockingError={(message) => {
+            setSessionError(message)
+            setSessionActive(false)
+          }}
+        />
       )}
 
-      {stage === 'dashboard' && (
-        <section className="mx-auto w-full max-w-7xl space-y-4">
-          <div className="flex flex-wrap items-center gap-3">
-            <button
-              type="button"
-              className="rounded-xl border border-slate-200 bg-white px-3 py-2 text-sm font-medium"
-              onClick={() => setStage('profiles')}
-            >
-              Back
-            </button>
-            <p className="text-sm text-slate-600">{users.find((u) => u.userId === selectedUser)?.name || selectedUser}</p>
-
-            {analysisView && (
-              <div className="ml-auto flex items-center gap-3">
-                <div className="inline-flex rounded-xl border border-slate-200 bg-white p-1 shadow-sm">
-                  <button
-                    type="button"
-                    onClick={() => setTrendMode('daily')}
-                    className={`rounded-lg px-3 py-1.5 text-sm ${trendMode === 'daily' ? 'bg-cyan-600 text-white' : 'text-slate-600'}`}
-                  >
-                    Daily
-                  </button>
-                  <button
-                    type="button"
-                    onClick={() => setTrendMode('weekly')}
-                    className={`rounded-lg px-3 py-1.5 text-sm ${trendMode === 'weekly' ? 'bg-cyan-600 text-white' : 'text-slate-600'}`}
-                  >
-                    Weekly
-                  </button>
-                </div>
-
-                <div className="inline-flex items-center gap-2 text-sm text-slate-600">
-                  <button
-                    type="button"
-                    onClick={() => {
-                      setSelectedDate((d) => {
-                        const nd = new Date(d)
-                        nd.setDate(nd.getDate() - (trendMode === 'daily' ? 1 : 7))
-                        nd.setHours(0, 0, 0, 0)
-                        return nd
-                      })
-                    }}
-                    className="rounded-md border border-slate-200 bg-white px-2 py-1"
-                  >
-                    ‹
-                  </button>
-
-                  <div className="px-2">
-                    {trendMode === 'daily'
-                      ? selectedDate.toLocaleDateString()
-                      : `${new Date(selectedDate.getTime() - 6 * dayMs).toLocaleDateString([], { month: 'short', day: 'numeric' })} — ${selectedDate.toLocaleDateString([], { month: 'short', day: 'numeric' })}`}
-                  </div>
-
-                  <button
-                    type="button"
-                    onClick={() => {
-                      setSelectedDate((d) => {
-                        const nd = new Date(d)
-                        nd.setDate(nd.getDate() + (trendMode === 'daily' ? 1 : 7))
-                        nd.setHours(0, 0, 0, 0)
-                        return nd
-                      })
-                    }}
-                    className="rounded-md border border-slate-200 bg-white px-2 py-1"
-                  >
-                    ›
-                  </button>
-                </div>
-              </div>
-            )}
-          </div>
-
-          <div className="grid gap-4 lg:grid-cols-[300px,1fr]">
-            <aside className="rounded-2xl border border-slate-200 bg-white p-3 shadow-sm">
-              <p className="mb-2 px-2 text-xs uppercase tracking-wide text-slate-500">Sessions</p>
-              <div className="space-y-2">
-                {userSessions.map((s) => (
-                  <button
-                    key={s.id}
-                    type="button"
-                    onClick={() => setSelectedSession(s.id)}
-                    className={`w-full rounded-xl border px-3 py-2 text-left text-sm transition ${
-                      selectedSession === s.id
-                        ? 'border-cyan-300 bg-cyan-50 text-cyan-800'
-                        : 'border-slate-200 bg-white hover:bg-slate-50'
-                    }`}
-                  >
-                    <p className="font-medium">{s.id}</p>
-                    <p className="text-xs text-slate-500">{niceTime(s.startedAt)}</p>
-                  </button>
-                ))}
-                {!userSessions.length && (
-                  <div className="rounded-xl border border-dashed border-slate-200 p-4 text-sm text-slate-500">
-                    No sessions for this profile.
-                  </div>
-                )}
-              </div>
-            </aside>
-
-            <div className="space-y-4">
-              <section className="rounded-3xl border border-slate-200 bg-white p-5 shadow-[0_20px_40px_rgba(15,23,42,0.06)]">
-                {!selectedSession && (
-                  <div className="grid h-[360px] place-items-center rounded-2xl bg-gradient-to-b from-slate-50 to-white text-sm text-slate-500">
-                    Select a session from the left panel.
-                  </div>
-                )}
-
-                {selectedSession && !analysisView && (
-                  <div className="space-y-4">
-                    <h3 className="text-xl font-semibold text-slate-900">{selectedSession}</h3>
-                    <div className="grid gap-4 md:grid-cols-2">
-                      <button
-                        type="button"
-                        onClick={() => {
-                          setSignalType('face')
-                          setAnalysisView('face')
-                        }}
-                        className="group rounded-3xl border border-slate-200 bg-white p-5 text-left shadow-sm transition hover:-translate-y-1 hover:shadow-md"
-                      >
-                        <div className="mb-4 inline-flex h-12 w-12 items-center justify-center rounded-2xl bg-cyan-100 text-cyan-700">◉</div>
-                        <p className="text-lg font-semibold text-slate-900">Face</p>
-                        <p className="mt-1 text-sm text-slate-500">Open face emotion trend graph</p>
-                      </button>
-
-                      <button
-                        type="button"
-                        disabled={!hasVoiceData}
-                        onClick={() => {
-                          setSignalType('voice')
-                          setAnalysisView('voice')
-                        }}
-                        className={`group rounded-3xl border border-slate-200 bg-white p-5 text-left shadow-sm transition hover:-translate-y-1 hover:shadow-md ${!hasVoiceData ? 'cursor-not-allowed opacity-45' : ''}`}
-                      >
-                        <div className="mb-4 inline-flex h-12 w-12 items-center justify-center rounded-2xl bg-violet-100 text-violet-700">◌</div>
-                        <p className="text-lg font-semibold text-slate-900">Voice</p>
-                        <p className="mt-1 text-sm text-slate-500">
-                          {hasVoiceData ? 'Open voice emotion trend graph' : 'No voice data for this session'}
-                        </p>
-                      </button>
-                    </div>
-                  </div>
-                )}
-
-                {selectedSession && analysisView && (
-                  <>
-                    <div className="mb-3 flex items-center justify-between gap-3">
-                      <div>
-                        <h3 className="text-xl font-semibold text-slate-900">{selectedSession}</h3>
-                        <p className="text-xs text-slate-500">{signalType === 'face' ? 'Face' : 'Voice'} · updates every second</p>
-                      </div>
-                      <button
-                        type="button"
-                        onClick={() => setAnalysisView('')}
-                        className="rounded-xl border border-slate-200 bg-white px-3 py-2 text-sm font-medium text-slate-600"
-                      >
-                        Change source
-                      </button>
-                    </div>
-
-                    <div className="h-[360px] rounded-2xl bg-gradient-to-b from-cyan-50 to-white p-2">
-                      {chartData.length ? (
-                        <ResponsiveContainer width="100%" height="100%">
-                          <LineChart data={chartData}>
-                            <CartesianGrid strokeDasharray="3 3" stroke="#e2e8f0" />
-                            <XAxis dataKey="t" tick={{ fontSize: 11, fill: '#64748b' }} />
-                            <YAxis domain={[0, 100]} tick={{ fontSize: 11, fill: '#64748b' }} />
-                            <Tooltip />
-                            <Legend />
-                            <Line type="monotone" dataKey="a" name="Arousal" stroke="#0284c7" strokeWidth={2.5} dot={false} activeDot={{ r: 5 }} />
-                            <Line type="monotone" dataKey="v" name="Valence" stroke="#f97316" strokeWidth={2.5} dot={false} activeDot={{ r: 5 }} />
-                            <Line type="monotone" dataKey="e" name="Expectation" stroke="#8b5cf6" strokeWidth={2.5} dot={false} activeDot={{ r: 5 }} />
-                          </LineChart>
-                        </ResponsiveContainer>
-                      ) : (
-                        <div className="grid h-full place-items-center text-sm text-slate-500">
-                          No {signalType} metrics stored for this session.
-                        </div>
-                      )}
-                    </div>
-                  </>
-                )}
-              </section>
-
-              <section className={`grid grid-cols-2 gap-3 md:grid-cols-4 ${analysisView ? '' : 'opacity-40'}`}>
-                <article className="rounded-2xl border border-slate-200 bg-white p-4 shadow-sm">
-                  <p className="text-xs uppercase text-slate-400">Avg A / V / E</p>
-                  <p className="mt-2 text-lg font-semibold text-slate-900">
-                    {formatValue(avg.a)} / {formatValue(avg.v)} / {formatValue(avg.e)}
-                  </p>
-                </article>
-                <article className="rounded-2xl border border-slate-200 bg-white p-4 shadow-sm">
-                  <p className="text-xs uppercase text-slate-400">Current A / V / E</p>
-                  <p className="mt-2 text-lg font-semibold text-slate-900">
-                    {formatValue(latestPoint.a)} / {formatValue(latestPoint.v)} / {formatValue(latestPoint.e)}
-                  </p>
-                </article>
-                <article className="rounded-2xl border border-slate-200 bg-white p-4 shadow-sm">
-                  <p className="text-xs uppercase text-slate-400">Session duration</p>
-                  <p className="mt-2 text-2xl font-semibold text-slate-900">{Math.round(Number(sessionDetail?.durationSec || 0))}s</p>
-                </article>
-                <article className="rounded-2xl border border-slate-200 bg-white p-4 shadow-sm">
-                  <p className="text-xs uppercase text-slate-400">Peak Valence</p>
-                  <p className="mt-2 text-2xl font-semibold text-slate-900">{formatValue(avg.peakV)}</p>
-                </article>
-              </section>
-            </div>
-          </div>
-        </section>
+      {calibrationMode && (
+        <CalibrationMode
+          profile={calibrationProfile}
+          onComplete={handleCalibrationComplete}
+          onCancel={handleCalibrationCancel}
+          onDataCollected={handleCalibrationDataCollection}
+          connectionState={connectionState}
+          sampleCounts={calibrationSampleCounts}
+          voiceSampleCounts={voiceCalibrationSampleCounts}
+          predictionsReady={calibrationStreamReady}
+        />
       )}
     </div>
   )
 }
+
+export default App;
