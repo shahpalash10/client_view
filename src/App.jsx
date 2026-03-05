@@ -225,7 +225,7 @@ export default function App() {
         {stage === 'profiles' && (
           <div className="mx-auto w-full max-w-5xl px-6">
             {/* ── Hero Header ── */}
-            <header className="pt-16 pb-14 text-center">
+            <header className="pt-16 pb-16 text-center flex flex-col items-center">
               <div className="inline-flex items-center gap-2 rounded-full border border-indigo-200/70 bg-indigo-50/90 px-4 py-1.5 mb-6 shadow-sm">
                 <span className="h-1.5 w-1.5 rounded-full bg-indigo-500 animate-pulseSoft" />
                 <span className="text-[11px] font-semibold tracking-widest uppercase text-indigo-600">
@@ -233,18 +233,18 @@ export default function App() {
                 </span>
               </div>
 
-              <h1 className="text-5xl font-extrabold tracking-tight text-slate-900 mb-4 leading-tight">
+              <h1 className="text-5xl font-extrabold tracking-tight text-slate-900 mb-5 leading-tight">
                 Select a{' '}
                 <span className="bg-gradient-to-r from-indigo-500 via-violet-500 to-cyan-500 bg-clip-text text-transparent">
                   Profile
                 </span>
               </h1>
 
-              <p className="text-slate-500 text-lg max-w-md mx-auto leading-relaxed">
+              <p className="text-slate-500 text-lg max-w-md leading-relaxed mb-8">
                 Choose a participant to explore their biometric emotional analytics and session history.
               </p>
 
-              <div className="mt-8 flex items-center justify-center gap-6 text-sm text-slate-400">
+              <div className="flex items-center justify-center gap-6 text-sm text-slate-400">
                 <span className="flex items-center gap-1.5">
                   <span className="h-2 w-2 rounded-full bg-emerald-400" />
                   {users.length} active profiles
@@ -257,7 +257,7 @@ export default function App() {
             </header>
 
             {/* ── Profile Cards Grid ── */}
-            <div className="grid grid-cols-1 gap-6 sm:grid-cols-2 lg:grid-cols-3 pb-24">
+            <div className="flex flex-wrap justify-center gap-6 pb-24">
               {users.slice(0, 9).map((u, idx) => (
                 <button
                   key={u.userId}
@@ -266,7 +266,7 @@ export default function App() {
                     setSelectedUser(u.userId)
                     setStage('dashboard')
                   }}
-                  className="profile-pop group relative overflow-hidden rounded-3xl bg-white text-left shadow-premium ring-1 ring-slate-200/80 transition-all duration-300 hover:-translate-y-2 hover:shadow-[0_28px_60px_rgba(15,23,42,0.13)] hover:ring-slate-300 focus:outline-none focus:ring-2 focus:ring-indigo-400"
+                  className="profile-pop group relative overflow-hidden rounded-3xl bg-white text-left shadow-premium ring-1 ring-slate-200/80 transition-all duration-300 hover:-translate-y-2 hover:shadow-[0_28px_60px_rgba(15,23,42,0.13)] hover:ring-slate-300 focus:outline-none focus:ring-2 focus:ring-indigo-400 w-full sm:w-[320px]"
                   style={{ animationDelay: `${idx * 65}ms` }}
                 >
                   {/* Gradient banner */}
