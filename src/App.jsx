@@ -209,24 +209,17 @@ export default function App() {
   return (
     <div className="min-h-screen bg-gradient-to-b from-white to-slate-100 p-4 md:p-8">
       <div className="mx-auto w-full max-w-7xl">
-        <header className="mb-5 flex items-center justify-between rounded-2xl border border-slate-200 bg-white px-5 py-4 shadow-soft">
-          <div className="flex items-center gap-2">
+        {stage === 'dashboard' && (
+          <header className="mb-5 flex items-center justify-between rounded-2xl border border-slate-200 bg-white px-5 py-4 shadow-soft">
             <div className="h-9 w-9 rounded-xl bg-gradient-to-br from-cyan-500 to-indigo-500" />
-            <span className="font-semibold">Session Vista</span>
-          </div>
-          <h1 className="text-xl font-semibold">Session Analytics</h1>
-          <div className="h-9 w-9 rounded-full border border-slate-200 bg-white" />
-        </header>
+            <h1 className="text-xl font-semibold">Analytics</h1>
+            <div className="h-9 w-9 rounded-full border border-slate-200 bg-white" />
+          </header>
+        )}
 
         {stage === 'profiles' && (
-          <section className="rounded-3xl border border-slate-200 bg-white p-6 shadow-premium md:p-8">
-            <div className="mb-7 text-center">
-              <p className="text-xs uppercase tracking-[0.2em] text-slate-500">Profiles</p>
-              <h2 className="mt-2 text-3xl font-bold text-slate-900 md:text-4xl">Tap a profile to open insights</h2>
-              <p className="mt-2 text-sm text-slate-500">Preview shows weekly average Arousal, Valence, Expectation</p>
-            </div>
-
-            <div className="grid gap-4 sm:grid-cols-2 xl:grid-cols-3">
+          <section className="rounded-3xl border border-slate-200 bg-white p-4 shadow-premium md:p-6">
+            <div className="grid gap-5 md:grid-cols-2">
               {users.slice(0, 9).map((u, idx) => (
                 <button
                   key={u.userId}
@@ -238,28 +231,28 @@ export default function App() {
                   className="profile-pop overflow-hidden rounded-3xl border border-slate-200 bg-white text-left shadow-soft transition hover:-translate-y-1 hover:shadow-premium"
                   style={{ animationDelay: `${idx * 70}ms` }}
                 >
-                  <div className={`h-24 bg-gradient-to-br ${profileColors[idx % profileColors.length]} opacity-95`} />
-                  <div className="space-y-3 p-4">
+                  <div className={`h-32 bg-gradient-to-br ${profileColors[idx % profileColors.length]} opacity-95`} />
+                  <div className="space-y-4 p-5">
                     <div className="flex items-center justify-between">
                       <div>
-                        <p className="text-base font-semibold text-slate-900">{u.name}</p>
-                        <p className="text-xs text-slate-500">{u.count} total sessions</p>
+                        <p className="text-xl font-semibold text-slate-900">{u.name}</p>
+                        <p className="text-sm text-slate-500">{u.count} total sessions</p>
                       </div>
-                      <div className="rounded-full bg-slate-100 px-2.5 py-1 text-xs font-medium text-slate-600">Open</div>
+                      <div className="rounded-full bg-slate-100 px-3 py-1.5 text-sm font-medium text-slate-600">Open</div>
                     </div>
 
                     <div className="grid grid-cols-3 gap-2 text-center">
-                      <div className="rounded-xl bg-slate-50 p-2">
+                      <div className="rounded-xl bg-slate-50 p-3">
                         <p className="text-[10px] uppercase text-slate-400">A</p>
-                        <p className="text-sm font-semibold text-slate-900">{formatValue(u.preview.a)}</p>
+                        <p className="text-base font-semibold text-slate-900">{formatValue(u.preview.a)}</p>
                       </div>
-                      <div className="rounded-xl bg-slate-50 p-2">
+                      <div className="rounded-xl bg-slate-50 p-3">
                         <p className="text-[10px] uppercase text-slate-400">V</p>
-                        <p className="text-sm font-semibold text-slate-900">{formatValue(u.preview.v)}</p>
+                        <p className="text-base font-semibold text-slate-900">{formatValue(u.preview.v)}</p>
                       </div>
-                      <div className="rounded-xl bg-slate-50 p-2">
+                      <div className="rounded-xl bg-slate-50 p-3">
                         <p className="text-[10px] uppercase text-slate-400">E</p>
-                        <p className="text-sm font-semibold text-slate-900">{formatValue(u.preview.e)}</p>
+                        <p className="text-base font-semibold text-slate-900">{formatValue(u.preview.e)}</p>
                       </div>
                     </div>
                   </div>
