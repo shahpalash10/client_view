@@ -18,6 +18,12 @@ const parseTime = (value) => {
   return Number.isNaN(d.getTime()) ? null : d
 }
 
+const niceTime = (value) => {
+  const d = parseTime(value)
+  if (!d) return '--:--:--'
+  return d.toLocaleTimeString([], { hour12: false })
+}
+
 const timeLabel = (value, mode) => {
   const d = parseTime(value)
   if (!d) return '--:--'
