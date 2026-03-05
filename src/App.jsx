@@ -270,31 +270,15 @@ export default function App() {
     <div className={stage === 'profiles' ? 'min-h-screen bg-gradient-to-br from-slate-50 via-white to-indigo-50/30 p-8' : 'min-h-screen bg-gradient-to-b from-white to-slate-100 p-4 md:p-8'}>
       {stage === 'profiles' && (
         <section className="relative mx-auto w-full max-w-6xl px-2 pb-12">
-          <div className="relative overflow-hidden rounded-[44px] bg-gradient-to-br from-sky-600 via-indigo-600 to-cyan-500 px-8 py-12 text-white shadow-[0_30px_90px_rgba(14,37,102,0.35)]">
-            <div className="relative z-10 flex flex-col gap-8 md:flex-row md:items-end md:justify-between">
-              <div className="space-y-4">
-                <p className="text-xs uppercase tracking-[0.6em] text-white/70">Client Repository</p>
-                <h1 className="text-[clamp(2rem,5vw,3.8rem)] font-semibold leading-tight">Immersive Emotion Profiles</h1>
-                <p className="max-w-2xl text-base text-white/85">
-                  Where every capture session becomes a living story. Pick a profile to drop straight into their
-                  realtime dashboard, complete with face and voice mood trends.
-                </p>
-                <div className="flex flex-wrap items-center gap-3 text-sm text-white/80">
-                  <span className="inline-flex items-center gap-2 rounded-full border border-white/30 px-4 py-1.5">
-                    <span className="h-2 w-2 animate-pulse rounded-full bg-cyan-200" />
-                    {users.length} active profiles
-                  </span>
-                  <span className="inline-flex items-center gap-2 rounded-full border border-white/30 px-4 py-1.5">
-                    <span className="h-2 w-2 animate-ping rounded-full bg-white/70" />
-                    Live pipeline ready
-                  </span>
-                </div>
-              </div>
-              <div className="rounded-[28px] bg-white/15 p-6 text-sm text-white/90 backdrop-blur">
-                <p className="text-xs uppercase tracking-[0.4em] text-white/70">Now streaming</p>
-                <p className="mt-3 text-3xl font-semibold">Face + Voice</p>
-                <p className="mt-2 text-white/75">Switch sources inside each session analysis panel.</p>
-              </div>
+          <div className="relative overflow-hidden rounded-[40px] bg-gradient-to-br from-sky-600 via-indigo-600 to-cyan-500 px-8 py-10 text-white shadow-[0_25px_80px_rgba(14,37,102,0.28)]">
+            <div className="relative z-10 mx-auto max-w-3xl space-y-4 text-center md:text-left">
+              <p className="text-[0.7rem] uppercase tracking-[0.55em] text-white/70">Client Repository</p>
+              <h1 className="text-[clamp(2.25rem,4vw,3.5rem)] font-semibold leading-tight text-white">
+                Immersive Emotion Profiles
+              </h1>
+              <p className="text-base text-white/80">
+                Face + voice mood snapshots, one tap away.
+              </p>
             </div>
 
             <div className="pointer-events-none">
@@ -304,7 +288,7 @@ export default function App() {
             </div>
           </div>
 
-          <div className="relative -mt-14 flex flex-wrap justify-center gap-8 rounded-[40px] bg-white/70 px-2 pb-6 pt-16 shadow-[0_35px_80px_rgba(15,23,42,0.15)] backdrop-blur">
+          <div className="relative -mt-10 flex flex-wrap justify-center gap-8 rounded-[40px] bg-white/70 px-2 pb-6 pt-16 shadow-[0_35px_80px_rgba(15,23,42,0.15)] backdrop-blur">
             {users.map((u, idx) => (
               <button
                 key={u.userId}
