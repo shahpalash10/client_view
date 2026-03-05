@@ -209,7 +209,7 @@ export default function App() {
 
   return (
     <div className={stage === 'profiles'
-      ? 'min-h-screen bg-gradient-to-br from-slate-50 via-white to-indigo-50/40'
+      ? 'min-h-screen overflow-x-hidden bg-gradient-to-br from-slate-50 via-white to-indigo-50/40'
       : 'min-h-screen bg-gradient-to-b from-white to-slate-100 p-4 md:p-8'
     }>
       <div className={stage === 'profiles' ? 'mx-auto w-full max-w-6xl px-6' : 'mx-auto w-full max-w-7xl'}>
@@ -257,7 +257,7 @@ export default function App() {
             </header>
 
             {/* ── Profile Cards Grid ── */}
-            <div className="grid gap-6 sm:grid-cols-2 lg:grid-cols-3 pb-20">
+            <div className="grid gap-6 sm:grid-cols-2 lg:grid-cols-3 pb-20 justify-items-stretch">
               {users.slice(0, 9).map((u, idx) => (
                 <button
                   key={u.userId}
