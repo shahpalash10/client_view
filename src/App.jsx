@@ -225,7 +225,7 @@ export default function App() {
         {stage === 'profiles' && (
           <div className="mx-auto w-full max-w-5xl px-6">
             {/* ── Hero Header ── */}
-            <header className="pt-16 pb-16 text-center flex flex-col items-center">
+            <header className="pt-24 pb-20 text-center flex flex-col items-center">
               <div className="inline-flex items-center gap-2 rounded-full border border-indigo-200/70 bg-indigo-50/90 px-4 py-1.5 mb-6 shadow-sm">
                 <span className="h-1.5 w-1.5 rounded-full bg-indigo-500 animate-pulseSoft" />
                 <span className="text-[11px] font-semibold tracking-widest uppercase text-indigo-600">
@@ -257,7 +257,7 @@ export default function App() {
             </header>
 
             {/* ── Profile Cards Grid ── */}
-            <div className="flex flex-wrap justify-center gap-6 pb-24">
+            <div className="flex flex-wrap justify-center gap-6 pb-24 mt-4">
               {users.slice(0, 9).map((u, idx) => (
                 <button
                   key={u.userId}
