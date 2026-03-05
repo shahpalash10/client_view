@@ -1,321 +1,256 @@
-import React, { useCallback, useEffect, useMemo, useState } from 'react'
+import { useEffect, useMemo, useState } from 'react'
 import {
-  Area,
-  AreaChart,
-  Bar,
-  BarChart,
-  CartesianGrid,
-  ReferenceDot,
+  Line,
+  LineChart,
   ResponsiveContainer,
   Tooltip,
   XAxis,
-  YAxis
+  YAxis,
+  CartesianGrid,
+  Area,
+  ComposedChart
 } from 'recharts'
-import { fetchSessionDetailsBulk, fetchSessions, fetchSessionsForUser } from './api'
-import { groupUsers, preprocessUserReports } from './utils/reportPreprocessor'
+import { fetchAllSessions, fetchSessionById } from './api'
 
-const PERIODS = [
-  { key: 'daily', label: 'Daily' },
-  { key: 'weekly', label: 'Weekly' },
-  { key: 'monthly', label: 'Monthly' }
-]
+const FALLBACK_SESSIONS = Array.from({ length: 7 }, (_, i) => ({ id: `Session ${i + 1}` }))
 
-const VIEWS = [
-  { key: 'overview', label: 'Overview' },
-  { key: 'graph', label: 'Graph' }
-]
+const asMetricValue = (metric = {}) => {
+  if (Number.isFinite(metric.value)) return metric.value
+  if (Number.isFinite(metric.avgValence)) return metric.avgValence
+  if (Number.isFinite(metric.avgArousal)) return metric.avgArousal
+  if (Number.isFinite(metric.avgExpectation)) return metric.avgExpectation
+  return null
+}
 
-const formatNumber = (value) => (Number.isFinite(value) ? value.toFixed(1) : '-')
+const formatClock = (stamp) => {
+  const date = new Date(stamp)
+  if (Number.isNaN(date.getTime())) return '--:--:--'
+  return date.toLocaleTimeString([], { hour12: false })
+}
 
-function App() {
-  const [sessions, setSessions] = useState([])
-  const [selectedUserId, setSelectedUserId] = useState('')
-  const [period, setPeriod] = useState('weekly')
-  const [view, setView] = useState('overview')
-  const [details, setDetails] = useState([])
-  const [loadingSessions, setLoadingSessions] = useState(true)
-  const [loadingDetails, setLoadingDetails] = useState(false)
-  const [error, setError] = useState(null)
-  const [stage, setStage] = useState('profiles')
-  const [zoomingProfileId, setZoomingProfileId] = useState('')
-  const [movingIndex, setMovingIndex] = useState(0)
-
-  const loadSessions = useCallback(async (silent = false) => {
-    try {
-      if (!silent) setLoadingSessions(true)
-      const data = await fetchSessions()
-      setSessions(data)
-      setError(null)
-    } catch (err) {
-      setError(err.message)
-    } finally {
-      if (!silent) setLoadingSessions(false)
-    }
-  }, [])
-
-  useEffect(() => {
-    loadSessions(false)
-    const timer = setInterval(() => loadSessions(true), 12000)
-    return () => clearInterval(timer)
-  }, [loadSessions])
-
-  const users = useMemo(() => groupUsers(sessions), [sessions])
-
-  useEffect(() => {
-    if (!selectedUserId && users.length) {
-      setSelectedUserId(users[0].userId)
-    }
-  }, [users, selectedUserId])
-
-  const loadUserDetails = useCallback(async () => {
-    if (!selectedUserId) {
-      setDetails([])
-      return
-    }
-
-    setLoadingDetails(true)
-    try {
-      const userSessions = await fetchSessionsForUser(selectedUserId)
-      const sessionIds = userSessions.slice(0, 180).map((session) => session.id)
-      const fullDetails = await fetchSessionDetailsBulk(sessionIds, 6)
-      setDetails(fullDetails)
-      setError(null)
-    } catch (err) {
-      setError(err.message)
-    } finally {
-      setLoadingDetails(false)
-    }
-  }, [selectedUserId])
-
-  useEffect(() => {
-    loadUserDetails()
-  }, [loadUserDetails])
-
-  const selectedUserSessions = useMemo(
-    () => sessions.filter((session) => session.userId === selectedUserId),
-    [sessions, selectedUserId]
-  )
-
-  const report = useMemo(
-    () => preprocessUserReports({ sessions: selectedUserSessions, details, period }),
-    [selectedUserSessions, details, period]
-  )
-
-  useEffect(() => {
-    if (view !== 'graph' || report.buckets.length === 0) return undefined
-    setMovingIndex(0)
-    const timer = setInterval(() => {
-      setMovingIndex((prev) => (prev + 1) % report.buckets.length)
-    }, 900)
-    return () => clearInterval(timer)
-  }, [view, report.buckets])
-
-  const selectedUser = users.find((user) => user.userId === selectedUserId)
-
-  const profileNodes = useMemo(() => {
-    return users.slice(0, 9).map((user, index) => {
-      const angle = (index / Math.max(users.length, 1)) * Math.PI * 2
-      const radius = index % 2 === 0 ? 34 : 24
-      return {
-        ...user,
-        left: 50 + Math.cos(angle) * radius,
-        top: 52 + Math.sin(angle) * radius
-      }
-    })
-  }, [users])
-
-  const movingPoint = report.buckets[movingIndex] || null
-
-  const openProfile = (userId) => {
-    setZoomingProfileId(userId)
-    setSelectedUserId(userId)
-    setTimeout(() => {
-      setStage('dashboard')
-      setView('overview')
-      setZoomingProfileId('')
-    }, 520)
-  }
-
+function Skeleton() {
   return (
-    <div className="scene-root">
-      {stage === 'profiles' && (
-        <section className="profiles-stage">
-          <div className="profiles-header">
-            <p className="eyebrow">Repository Experience</p>
-            <h1>Choose A Profile</h1>
-            <p className="subcopy">Tap a floating profile card to open its emotional story with animated analytics.</p>
-          </div>
-
-          <div className="profile-galaxy">
-            <svg className="connection-map" viewBox="0 0 100 100" preserveAspectRatio="none" aria-hidden>
-              {profileNodes.map((node) => (
-                <line key={node.userId} x1="50" y1="50" x2={node.left} y2={node.top} />
-              ))}
-              <circle cx="50" cy="50" r="5.2" className="core-node" />
-            </svg>
-
-            {profileNodes.map((node, index) => (
-              <button
-                key={node.userId}
-                type="button"
-                className="profile-card"
-                style={{ left: `${node.left}%`, top: `${node.top}%`, animationDelay: `${index * 70}ms` }}
-                onClick={() => openProfile(node.userId)}
-              >
-                <div className="avatar">{(node.profileName || node.userId || 'U').charAt(0).toUpperCase()}</div>
-                <div>
-                  <strong>{node.profileName || node.userId}</strong>
-                  <small>{node.sessionCount} sessions</small>
-                </div>
-              </button>
-            ))}
-          </div>
-
-          {loadingSessions && <div className="loading-strip">Syncing profiles...</div>}
-          {error && <div className="error-strip">{error}</div>}
-
-          {zoomingProfileId && <div className="zoom-overlay" />}
-        </section>
-      )}
-
-      {stage === 'dashboard' && (
-        <section className="dashboard-stage">
-          <header className="topbar">
-            <button type="button" className="back-btn" onClick={() => setStage('profiles')}>
-              Profiles
-            </button>
-            <div>
-              <p className="eyebrow">{selectedUser?.profileName || selectedUserId}</p>
-              <h2>Emotion Timeline</h2>
-            </div>
-            <div className="status-chip">{loadingDetails ? 'Updating...' : 'Live linked'}</div>
-          </header>
-
-          <section className="controls-row">
-            <div className="pill-group">
-              {PERIODS.map((item) => (
-                <button
-                  key={item.key}
-                  type="button"
-                  className={period === item.key ? 'active' : ''}
-                  onClick={() => setPeriod(item.key)}
-                >
-                  {item.label}
-                </button>
-              ))}
-            </div>
-
-            <div className="pill-group secondary">
-              {VIEWS.map((item) => (
-                <button
-                  key={item.key}
-                  type="button"
-                  className={view === item.key ? 'active' : ''}
-                  onClick={() => setView(item.key)}
-                >
-                  {item.label}
-                </button>
-              ))}
-            </div>
-          </section>
-
-          <section className="stat-grid">
-            <article className="stat-card">
-              <p>Sessions</p>
-              <h3>{report.summary.sessionCount}</h3>
-            </article>
-            <article className="stat-card">
-              <p>Arousal</p>
-              <h3>{formatNumber(report.summary.avgArousal)}</h3>
-            </article>
-            <article className="stat-card">
-              <p>Valence</p>
-              <h3>{formatNumber(report.summary.avgValence)}</h3>
-            </article>
-            <article className="stat-card">
-              <p>Expectation</p>
-              <h3>{formatNumber(report.summary.avgExpectation)}</h3>
-            </article>
-          </section>
-
-          <section className="content-grid">
-            <article className={`panel chart-panel ${view === 'graph' ? 'open' : ''}`}>
-              <div className="panel-head">
-                <h3>{view === 'graph' ? 'Animated Graph Mode' : 'Trend Snapshot'}</h3>
-                <span>{period}</span>
-              </div>
-
-              <div className="chart-box">
-                <ResponsiveContainer width="100%" height="100%">
-                  <AreaChart data={report.buckets}>
-                    <defs>
-                      <linearGradient id="arousalFill" x1="0" y1="0" x2="0" y2="1">
-                        <stop offset="0%" stopColor="#33d4ff" stopOpacity={0.46} />
-                        <stop offset="100%" stopColor="#33d4ff" stopOpacity={0.05} />
-                      </linearGradient>
-                      <linearGradient id="valenceFill" x1="0" y1="0" x2="0" y2="1">
-                        <stop offset="0%" stopColor="#ff8e43" stopOpacity={0.43} />
-                        <stop offset="100%" stopColor="#ff8e43" stopOpacity={0.05} />
-                      </linearGradient>
-                    </defs>
-                    <CartesianGrid strokeDasharray="4 4" stroke="rgba(255,255,255,0.12)" />
-                    <XAxis dataKey="label" stroke="#98abc5" minTickGap={12} />
-                    <YAxis stroke="#98abc5" domain={[0, 100]} />
-                    <Tooltip />
-                    <Area type="monotone" dataKey="avgArousal" stroke="#33d4ff" fill="url(#arousalFill)" strokeWidth={2.1} />
-                    <Area type="monotone" dataKey="avgValence" stroke="#ff8e43" fill="url(#valenceFill)" strokeWidth={2.1} />
-                    {view === 'graph' && movingPoint && (
-                      <ReferenceDot
-                        x={movingPoint.label}
-                        y={movingPoint.avgValence}
-                        r={6}
-                        fill="#ffffff"
-                        stroke="#ff8e43"
-                        strokeWidth={3}
-                      />
-                    )}
-                  </AreaChart>
-                </ResponsiveContainer>
-              </div>
-
-              {view === 'graph' && movingPoint && (
-                <div className="moving-readout">
-                  <strong>{movingPoint.label}</strong>
-                  <span>Valence {formatNumber(movingPoint.avgValence)}</span>
-                  <span>Arousal {formatNumber(movingPoint.avgArousal)}</span>
-                </div>
-              )}
-            </article>
-
-            <article className="panel side-panel">
-              <div className="panel-head">
-                <h3>Emotion Composition</h3>
-              </div>
-              <div className="mini-chart-box">
-                <ResponsiveContainer width="100%" height="100%">
-                  <BarChart data={report.buckets.slice(-8)}>
-                    <CartesianGrid strokeDasharray="4 4" stroke="rgba(255,255,255,0.12)" />
-                    <XAxis dataKey="label" stroke="#98abc5" hide />
-                    <YAxis stroke="#98abc5" />
-                    <Tooltip />
-                    <Bar dataKey="happy" stackId="m" fill="#22c55e" />
-                    <Bar dataKey="neutral" stackId="m" fill="#2a9dff" />
-                    <Bar dataKey="sad" stackId="m" fill="#ff5f8e" />
-                  </BarChart>
-                </ResponsiveContainer>
-              </div>
-
-              <ul className="insight-list">
-                {report.insights.map((line) => (
-                  <li key={line}>{line}</li>
-                ))}
-              </ul>
-            </article>
-          </section>
-        </section>
-      )}
+    <div className="space-y-4">
+      <div className="h-8 w-64 animate-pulseSoft rounded-xl bg-slate-100" />
+      <div className="h-72 animate-pulseSoft rounded-3xl bg-slate-100" />
+      <div className="grid grid-cols-2 gap-3 md:grid-cols-4">
+        {Array.from({ length: 4 }).map((_, i) => (
+          <div key={i} className="h-24 animate-pulseSoft rounded-2xl bg-slate-100" />
+        ))}
+      </div>
     </div>
   )
 }
 
-export default App
+export default function App() {
+  const [dropdownOpen, setDropdownOpen] = useState(false)
+  const [loading, setLoading] = useState(true)
+  const [sessions, setSessions] = useState([])
+  const [expandedSession, setExpandedSession] = useState('')
+  const [selectedSession, setSelectedSession] = useState('')
+  const [stream, setStream] = useState([])
+  const [durationSec, setDurationSec] = useState(0)
+
+  useEffect(() => {
+    let active = true
+
+    ;(async () => {
+      setLoading(true)
+      const apiSessions = await fetchAllSessions()
+      const normalized = (apiSessions || []).map((s) => ({ id: s.id || s.sessionId })).filter((s) => s.id)
+      const finalSessions = normalized.length ? normalized.slice(0, 7) : FALLBACK_SESSIONS
+      if (!active) return
+      setSessions(finalSessions)
+      setExpandedSession(finalSessions[0]?.id || '')
+      setSelectedSession(finalSessions[0]?.id || '')
+      setLoading(false)
+    })()
+
+    return () => {
+      active = false
+    }
+  }, [])
+
+  useEffect(() => {
+    if (!selectedSession) return undefined
+
+    let cancelled = false
+
+    const poll = async () => {
+      try {
+        const detail = await fetchSessionById(selectedSession)
+        if (cancelled) return
+
+        const metrics = detail.metrics || []
+        const lastMetric = metrics[metrics.length - 1] || detail.latestMetrics || {}
+        const currentValue = asMetricValue(lastMetric)
+        if (!Number.isFinite(currentValue)) return
+
+        setDurationSec(Math.round(Number(detail.durationSec || 0)))
+
+        setStream((prev) => {
+          const nextPoint = {
+            t: formatClock(lastMetric.timestamp || Date.now()),
+            value: Number(currentValue.toFixed(2)),
+            rawTs: lastMetric.timestamp || Date.now()
+          }
+          return [...prev.slice(-59), nextPoint]
+        })
+      } catch {
+        // keep UI stable if one poll fails
+      }
+    }
+
+    setStream([])
+    poll()
+    const timer = setInterval(poll, 1000)
+
+    return () => {
+      cancelled = true
+      clearInterval(timer)
+    }
+  }, [selectedSession])
+
+  const metrics = useMemo(() => {
+    const values = stream.map((p) => p.value)
+    const current = values[values.length - 1] || 0
+    const avg = values.length ? values.reduce((a, b) => a + b, 0) / values.length : 0
+    const peak = values.length ? Math.max(...values) : 0
+
+    return [
+      { label: 'Average Value', value: avg.toFixed(2) },
+      { label: 'Current Value', value: current.toFixed(2) },
+      { label: 'Session Duration', value: `${durationSec}s` },
+      { label: 'Peak Value', value: peak.toFixed(2) }
+    ]
+  }, [durationSec, stream])
+
+  return (
+    <div className="min-h-screen bg-gradient-to-b from-white via-slate-50 to-slate-100 px-4 py-6 text-slate-900 md:px-10">
+      <nav className="mx-auto mb-6 flex w-full max-w-7xl items-center justify-between rounded-2xl border border-slate-200/80 bg-white/80 px-5 py-4 shadow-soft backdrop-blur">
+        <div className="flex items-center gap-2">
+          <div className="h-8 w-8 rounded-xl bg-gradient-to-br from-cyan-500 to-indigo-500" />
+          <span className="text-sm font-semibold tracking-wide">SV</span>
+        </div>
+
+        <h1 className="text-lg font-semibold md:text-2xl">Session Analytics</h1>
+
+        <div className="relative">
+          <button
+            type="button"
+            onClick={() => setDropdownOpen((v) => !v)}
+            className="grid h-10 w-10 place-items-center rounded-full border border-slate-200 bg-white shadow-soft transition hover:scale-[1.03]"
+          >
+            <span className="text-sm font-bold">P</span>
+          </button>
+
+          {dropdownOpen && (
+            <div className="animate-slideDown absolute right-0 z-20 mt-3 w-80 rounded-2xl border border-slate-200 bg-white p-4 shadow-premium">
+              <div className="mb-4 flex items-center gap-3 rounded-xl bg-slate-50 p-3">
+                <div className="grid h-12 w-12 place-items-center rounded-full bg-gradient-to-br from-cyan-500 to-blue-600 text-sm font-bold text-white">
+                  PS
+                </div>
+                <div>
+                  <p className="text-sm font-semibold">Palash Shah</p>
+                  <p className="text-xs text-slate-500">Premium plan</p>
+                </div>
+              </div>
+
+              <div className="space-y-2">
+                {sessions.map((session) => (
+                  <div key={session.id} className="rounded-xl border border-slate-200">
+                    <button
+                      type="button"
+                      className="flex w-full items-center justify-between px-3 py-2 text-left text-sm font-medium transition hover:bg-slate-50"
+                      onClick={() => setExpandedSession((prev) => (prev === session.id ? '' : session.id))}
+                    >
+                      {session.id}
+                      <span className="text-slate-400">{expandedSession === session.id ? '−' : '+'}</span>
+                    </button>
+                    {expandedSession === session.id && (
+                      <button
+                        type="button"
+                        className="w-full rounded-b-xl bg-slate-50 px-3 py-2 text-left text-xs font-medium text-cyan-700 transition hover:bg-cyan-50"
+                        onClick={() => {
+                          setSelectedSession(session.id)
+                          setDropdownOpen(false)
+                        }}
+                      >
+                        Open analytics
+                      </button>
+                    )}
+                  </div>
+                ))}
+              </div>
+            </div>
+          )}
+        </div>
+      </nav>
+
+      <main className="mx-auto w-full max-w-7xl space-y-6">
+        {loading ? (
+          <Skeleton />
+        ) : (
+          <>
+            <section className="rounded-3xl border border-slate-200 bg-white p-5 shadow-premium md:p-6">
+              <div className="mb-4 flex items-center justify-between">
+                <div>
+                  <p className="text-xs font-semibold uppercase tracking-widest text-slate-400">Live Graph</p>
+                  <h2 className="text-xl font-semibold">{selectedSession || 'Session'}</h2>
+                </div>
+                <span className="rounded-full bg-emerald-50 px-3 py-1 text-xs font-medium text-emerald-600">
+                  Updates every second
+                </span>
+              </div>
+
+              <div className="h-[360px] w-full rounded-2xl bg-gradient-to-b from-cyan-50/70 to-white p-2">
+                <ResponsiveContainer width="100%" height="100%">
+                  <ComposedChart data={stream}>
+                    <defs>
+                      <linearGradient id="lineFill" x1="0" y1="0" x2="0" y2="1">
+                        <stop offset="0%" stopColor="#22d3ee" stopOpacity={0.32} />
+                        <stop offset="100%" stopColor="#22d3ee" stopOpacity={0.03} />
+                      </linearGradient>
+                    </defs>
+                    <CartesianGrid strokeDasharray="3 3" stroke="#dbe7f3" />
+                    <XAxis dataKey="t" tick={{ fill: '#6b7280', fontSize: 12 }} />
+                    <YAxis tick={{ fill: '#6b7280', fontSize: 12 }} domain={['auto', 'auto']} />
+                    <Tooltip
+                      contentStyle={{
+                        borderRadius: '12px',
+                        border: '1px solid #e2e8f0',
+                        boxShadow: '0 12px 24px rgba(15, 23, 42, 0.08)'
+                      }}
+                    />
+                    <Area type="monotone" dataKey="value" fill="url(#lineFill)" stroke="none" />
+                    <Line
+                      type="monotone"
+                      dataKey="value"
+                      stroke="#0891b2"
+                      strokeWidth={3}
+                      dot={{ r: 0 }}
+                      activeDot={{ r: 6, fill: '#fff', stroke: '#0891b2', strokeWidth: 3 }}
+                      isAnimationActive
+                    />
+                  </ComposedChart>
+                </ResponsiveContainer>
+              </div>
+            </section>
+
+            <section className="grid grid-cols-2 gap-3 md:grid-cols-4 md:gap-4">
+              {metrics.map((item) => (
+                <article
+                  key={item.label}
+                  className="rounded-2xl border border-slate-200 bg-white p-4 shadow-soft transition hover:-translate-y-0.5 hover:shadow-premium"
+                >
+                  <p className="text-xs uppercase tracking-wider text-slate-400">{item.label}</p>
+                  <p className="mt-2 text-2xl font-semibold text-slate-900">{item.value}</p>
+                </article>
+              ))}
+            </section>
+          </>
+        )}
+      </main>
+    </div>
+  )
+}
