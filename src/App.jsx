@@ -49,6 +49,11 @@ export default function App() {
   const [selectedSession, setSelectedSession] = useState('')
   const [sessionDetail, setSessionDetail] = useState(null)
   const [trendMode, setTrendMode] = useState('weekly')
+  const [selectedDate, setSelectedDate] = useState(() => {
+    const d = new Date()
+    d.setHours(0, 0, 0, 0)
+    return d
+  })
 
   useEffect(() => {
     let live = true
@@ -151,50 +156,80 @@ export default function App() {
   const chartData = useMemo(() => {
     if (!sessionDetail) return []
 
-    const days = trendMode === 'daily' ? 1 : 7
-    const cutoff = Date.now() - days * 24 * 60 * 60 * 1000
-
-    const points = (sessionDetail.metrics || [])
+    const metrics = (sessionDetail.metrics || [])
       .map((m) => {
         const ts = parseTime(m.timestamp)
         if (!ts) return null
-        return {
-          ts: ts.getTime(),
-          t: timeLabel(ts, trendMode),
+        return { ...m, ts: ts.getTime() }
+      })
+      .filter(Boolean)
+
+    const dayMs = 24 * 60 * 60 * 1000
+
+    if (trendMode === 'daily') {
+      const start = selectedDate.getTime()
+      const end = start + dayMs
+      const pts = metrics
+        .filter((m) => m.ts >= start && m.ts < end)
+        .map((m) => ({
+          ts: m.ts,
+          t: new Date(m.ts).toLocaleTimeString([], { hour12: false }),
           a: Number(m.avgArousal ?? 0),
           v: Number(m.avgValence ?? 0),
           e: Number(m.avgExpectation ?? 0)
-        }
-      })
-      .filter(Boolean)
-      .filter((p) => p.ts >= cutoff)
+        }))
+        .sort((a, b) => a.ts - b.ts)
 
-    if (points.length) return points.slice(-280)
+      if (pts.length) return pts.slice(-280)
 
-    const lm = sessionDetail.latestMetrics
-    if (lm) {
-      return [{
-        ts: Date.now(),
-        t: timeLabel(lm.timestamp || Date.now(), trendMode),
-        a: Number(lm.avgArousal ?? 0),
-        v: Number(lm.avgValence ?? 0),
-        e: Number(lm.avgExpectation ?? 0)
-      }]
+      const lm = sessionDetail.latestMetrics
+      if (lm) {
+        const lmTs = parseTime(lm.timestamp)?.getTime() || Date.now()
+        return [{ ts: lmTs, t: new Date(lmTs).toLocaleTimeString([], { hour12: false }), a: Number(lm.avgArousal ?? 0), v: Number(lm.avgValence ?? 0), e: Number(lm.avgExpectation ?? 0) }]
+      }
+
+      return []
     }
 
-    return []
-  }, [sessionDetail, trendMode])
+    // weekly: average per day for the 7 days ending at selectedDate
+    const days = 7
+    const pts = []
+    for (let i = days - 1; i >= 0; i--) {
+      const dayStart = selectedDate.getTime() - i * dayMs
+      const dayEnd = dayStart + dayMs
+      const dayMetrics = metrics.filter((m) => m.ts >= dayStart && m.ts < dayEnd)
+      if (dayMetrics.length) {
+        const total = dayMetrics.reduce(
+          (acc, m) => ({ a: acc.a + Number(m.avgArousal ?? 0), v: acc.v + Number(m.avgValence ?? 0), e: acc.e + Number(m.avgExpectation ?? 0) }),
+          { a: 0, v: 0, e: 0 }
+        )
+        pts.push({
+          ts: dayStart,
+          t: new Date(dayStart).toLocaleDateString([], { month: 'short', day: 'numeric' }),
+          a: total.a / dayMetrics.length,
+          v: total.v / dayMetrics.length,
+          e: total.e / dayMetrics.length
+        })
+      } else {
+        pts.push({ ts: dayStart, t: new Date(dayStart).toLocaleDateString([], { month: 'short', day: 'numeric' }), a: null, v: null, e: null })
+      }
+    }
+
+    return pts
+  }, [sessionDetail, trendMode, selectedDate])
 
   const latestPoint = chartData[chartData.length - 1] || { a: 0, v: 0, e: 0 }
 
   const avg = useMemo(() => {
     if (!chartData.length) return { a: 0, v: 0, e: 0, peakV: 0 }
-    const total = chartData.reduce((acc, p) => ({ a: acc.a + p.a, v: acc.v + p.v, e: acc.e + p.e }), { a: 0, v: 0, e: 0 })
+    const numeric = chartData.filter((p) => Number.isFinite(p.a) || Number.isFinite(p.v) || Number.isFinite(p.e))
+    if (!numeric.length) return { a: 0, v: 0, e: 0, peakV: 0 }
+    const total = numeric.reduce((acc, p) => ({ a: acc.a + (Number.isFinite(p.a) ? p.a : 0), v: acc.v + (Number.isFinite(p.v) ? p.v : 0), e: acc.e + (Number.isFinite(p.e) ? p.e : 0) }), { a: 0, v: 0, e: 0 })
     return {
-      a: total.a / chartData.length,
-      v: total.v / chartData.length,
-      e: total.e / chartData.length,
-      peakV: Math.max(...chartData.map((p) => p.v))
+      a: total.a / numeric.length,
+      v: total.v / numeric.length,
+      e: total.e / numeric.length,
+      peakV: Math.max(...chartData.map((p) => (Number.isFinite(p.v) ? p.v : -Infinity))) || 0
     }
   }, [chartData])
 
@@ -345,21 +380,67 @@ export default function App() {
               </button>
               <p className="text-sm text-slate-600">User: {users.find((u) => u.userId === selectedUser)?.name || selectedUser}</p>
 
-              <div className="ml-auto inline-flex rounded-xl border border-slate-200 bg-white p-1 shadow-soft">
-                <button
-                  type="button"
-                  onClick={() => setTrendMode('daily')}
-                  className={`rounded-lg px-3 py-1.5 text-sm ${trendMode === 'daily' ? 'bg-cyan-600 text-white' : 'text-slate-600'}`}
-                >
-                  Daily
-                </button>
-                <button
-                  type="button"
-                  onClick={() => setTrendMode('weekly')}
-                  className={`rounded-lg px-3 py-1.5 text-sm ${trendMode === 'weekly' ? 'bg-cyan-600 text-white' : 'text-slate-600'}`}
-                >
-                  Weekly
-                </button>
+              <div className="ml-auto flex items-center gap-3">
+                <div className="inline-flex rounded-xl border border-slate-200 bg-white p-1 shadow-soft">
+                  <button
+                    type="button"
+                    onClick={() => setTrendMode('daily')}
+                    className={`rounded-lg px-3 py-1.5 text-sm ${trendMode === 'daily' ? 'bg-cyan-600 text-white' : 'text-slate-600'}`}
+                  >
+                    Daily
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => setTrendMode('weekly')}
+                    className={`rounded-lg px-3 py-1.5 text-sm ${trendMode === 'weekly' ? 'bg-cyan-600 text-white' : 'text-slate-600'}`}
+                  >
+                    Weekly
+                  </button>
+                </div>
+
+                <div className="inline-flex items-center gap-2 text-sm text-slate-600">
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setSelectedDate((d) => {
+                        const nd = new Date(d)
+                        nd.setDate(nd.getDate() - (trendMode === 'daily' ? 1 : 7))
+                        nd.setHours(0, 0, 0, 0)
+                        return nd
+                      })
+                    }}
+                    className="rounded-md px-2 py-1 bg-white border border-slate-200"
+                  >
+                    ‹
+                  </button>
+
+                  <div className="px-2">
+                    {trendMode === 'daily' ? (
+                      selectedDate.toLocaleDateString()
+                    ) : (
+                      (() => {
+                        const dayMs = 24 * 60 * 60 * 1000
+                        const start = new Date(selectedDate.getTime() - 6 * dayMs)
+                        return `${start.toLocaleDateString([], { month: 'short', day: 'numeric' })} — ${selectedDate.toLocaleDateString([], { month: 'short', day: 'numeric' })}`
+                      })()
+                    )}
+                  </div>
+
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setSelectedDate((d) => {
+                        const nd = new Date(d)
+                        nd.setDate(nd.getDate() + (trendMode === 'daily' ? 1 : 7))
+                        nd.setHours(0, 0, 0, 0)
+                        return nd
+                      })
+                    }}
+                    className="rounded-md px-2 py-1 bg-white border border-slate-200"
+                  >
+                    ›
+                  </button>
+                </div>
               </div>
             </div>
 
