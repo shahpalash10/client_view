@@ -209,10 +209,10 @@ export default function App() {
 
   return (
     <div className={stage === 'profiles'
-      ? 'min-h-screen overflow-x-hidden bg-gradient-to-br from-slate-50 via-white to-indigo-50/40'
+      ? 'min-h-screen bg-gradient-to-br from-slate-50 via-white to-indigo-50/40'
       : 'min-h-screen bg-gradient-to-b from-white to-slate-100 p-4 md:p-8'
     }>
-      <div className={stage === 'profiles' ? 'mx-auto w-full max-w-6xl px-6' : 'mx-auto w-full max-w-7xl'}>
+      <div className={stage === 'profiles' ? 'w-full' : 'mx-auto w-full max-w-7xl'}>
 
         {stage === 'dashboard' && (
           <header className="mb-5 flex items-center justify-between rounded-2xl border border-slate-200 bg-white px-5 py-4 shadow-soft">
@@ -223,9 +223,9 @@ export default function App() {
         )}
 
         {stage === 'profiles' && (
-          <>
+          <div className="mx-auto w-full max-w-5xl px-6">
             {/* ── Hero Header ── */}
-            <header className="pt-16 pb-12 text-center">
+            <header className="pt-16 pb-14 text-center">
               <div className="inline-flex items-center gap-2 rounded-full border border-indigo-200/70 bg-indigo-50/90 px-4 py-1.5 mb-6 shadow-sm">
                 <span className="h-1.5 w-1.5 rounded-full bg-indigo-500 animate-pulseSoft" />
                 <span className="text-[11px] font-semibold tracking-widest uppercase text-indigo-600">
@@ -257,7 +257,7 @@ export default function App() {
             </header>
 
             {/* ── Profile Cards Grid ── */}
-            <div className="grid gap-6 sm:grid-cols-2 lg:grid-cols-3 pb-20 justify-items-stretch">
+            <div className="grid grid-cols-1 gap-6 sm:grid-cols-2 lg:grid-cols-3 pb-24">
               {users.slice(0, 9).map((u, idx) => (
                 <button
                   key={u.userId}
@@ -330,7 +330,7 @@ export default function App() {
                 </button>
               ))}
             </div>
-          </>
+          </div>
         )}
 
         {stage === 'dashboard' && (
