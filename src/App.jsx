@@ -200,15 +200,20 @@ export default function App() {
 
   if (loading) {
     return (
-      <div className="min-h-screen bg-slate-50 p-8">
-        <div className="mx-auto h-12 w-64 animate-pulse rounded-xl bg-slate-200" />
+      <div className="min-h-screen bg-gradient-to-br from-slate-50 via-white to-indigo-50/40 flex flex-col items-center justify-center gap-4 p-8">
+        <div className="h-10 w-64 animate-pulse rounded-2xl bg-slate-200/80" />
+        <div className="h-4 w-40 animate-pulse rounded-xl bg-slate-100" />
       </div>
     )
   }
 
   return (
-    <div className="min-h-screen bg-gradient-to-b from-white to-slate-100 p-4 md:p-8">
-      <div className="mx-auto w-full max-w-7xl">
+    <div className={stage === 'profiles'
+      ? 'min-h-screen bg-gradient-to-br from-slate-50 via-white to-indigo-50/40'
+      : 'min-h-screen bg-gradient-to-b from-white to-slate-100 p-4 md:p-8'
+    }>
+      <div className={stage === 'profiles' ? 'mx-auto w-full max-w-6xl px-6' : 'mx-auto w-full max-w-7xl'}>
+
         {stage === 'dashboard' && (
           <header className="mb-5 flex items-center justify-between rounded-2xl border border-slate-200 bg-white px-5 py-4 shadow-soft">
             <div className="h-9 w-9 rounded-xl bg-gradient-to-br from-cyan-500 to-indigo-500" />
@@ -218,8 +223,41 @@ export default function App() {
         )}
 
         {stage === 'profiles' && (
-          <section className="rounded-3xl border border-slate-200 bg-white p-4 shadow-premium md:p-6">
-            <div className="grid gap-5 md:grid-cols-2">
+          <>
+            {/* ── Hero Header ── */}
+            <header className="pt-16 pb-12 text-center">
+              <div className="inline-flex items-center gap-2 rounded-full border border-indigo-200/70 bg-indigo-50/90 px-4 py-1.5 mb-6 shadow-sm">
+                <span className="h-1.5 w-1.5 rounded-full bg-indigo-500 animate-pulseSoft" />
+                <span className="text-[11px] font-semibold tracking-widest uppercase text-indigo-600">
+                  Emotion Analytics Platform
+                </span>
+              </div>
+
+              <h1 className="text-5xl font-extrabold tracking-tight text-slate-900 mb-4 leading-tight">
+                Select a{' '}
+                <span className="bg-gradient-to-r from-indigo-500 via-violet-500 to-cyan-500 bg-clip-text text-transparent">
+                  Profile
+                </span>
+              </h1>
+
+              <p className="text-slate-500 text-lg max-w-md mx-auto leading-relaxed">
+                Choose a participant to explore their biometric emotional analytics and session history.
+              </p>
+
+              <div className="mt-8 flex items-center justify-center gap-6 text-sm text-slate-400">
+                <span className="flex items-center gap-1.5">
+                  <span className="h-2 w-2 rounded-full bg-emerald-400" />
+                  {users.length} active profiles
+                </span>
+                <span className="flex items-center gap-1.5">
+                  <span className="h-2 w-2 rounded-full bg-sky-400" />
+                  {users.reduce((s, u) => s + u.count, 0)} total sessions
+                </span>
+              </div>
+            </header>
+
+            {/* ── Profile Cards Grid ── */}
+            <div className="grid gap-6 sm:grid-cols-2 lg:grid-cols-3 pb-20">
               {users.slice(0, 9).map((u, idx) => (
                 <button
                   key={u.userId}
@@ -228,38 +266,71 @@ export default function App() {
                     setSelectedUser(u.userId)
                     setStage('dashboard')
                   }}
-                  className="profile-pop overflow-hidden rounded-3xl border border-slate-200 bg-white text-left shadow-soft transition hover:-translate-y-1 hover:shadow-premium"
-                  style={{ animationDelay: `${idx * 70}ms` }}
+                  className="profile-pop group relative overflow-hidden rounded-3xl bg-white text-left shadow-premium ring-1 ring-slate-200/80 transition-all duration-300 hover:-translate-y-2 hover:shadow-[0_28px_60px_rgba(15,23,42,0.13)] hover:ring-slate-300 focus:outline-none focus:ring-2 focus:ring-indigo-400"
+                  style={{ animationDelay: `${idx * 65}ms` }}
                 >
-                  <div className={`h-32 bg-gradient-to-br ${profileColors[idx % profileColors.length]} opacity-95`} />
-                  <div className="space-y-4 p-5">
-                    <div className="flex items-center justify-between">
-                      <div>
-                        <p className="text-xl font-semibold text-slate-900">{u.name}</p>
-                        <p className="text-sm text-slate-500">{u.count} total sessions</p>
-                      </div>
-                      <div className="rounded-full bg-slate-100 px-3 py-1.5 text-sm font-medium text-slate-600">Open</div>
+                  {/* Gradient banner */}
+                  <div className={`h-28 bg-gradient-to-br ${profileColors[idx % profileColors.length]} relative`}>
+                    <div className="absolute inset-0 bg-black/10" />
+                    {/* Session count badge */}
+                    <div className="absolute top-3 right-3 flex items-center gap-1 rounded-full bg-white/20 px-2.5 py-1 backdrop-blur-sm">
+                      <span className="text-[10px] font-bold uppercase tracking-wider text-white/95">
+                        {u.count} session{u.count !== 1 ? 's' : ''}
+                      </span>
+                    </div>
+                    {/* Decorative circles */}
+                    <div className="absolute -bottom-3 -right-3 h-20 w-20 rounded-full bg-white/10" />
+                    <div className="absolute -bottom-6 right-8 h-12 w-12 rounded-full bg-white/8" />
+                  </div>
+
+                  {/* Floating avatar */}
+                  <div className="absolute left-5 top-16 h-16 w-16 rounded-2xl bg-white shadow-[0_8px_24px_rgba(15,23,42,0.12)] ring-2 ring-white flex items-center justify-center">
+                    <span className={`text-2xl font-extrabold bg-gradient-to-br ${profileColors[idx % profileColors.length]} bg-clip-text text-transparent`}>
+                      {(u.name || '?')[0].toUpperCase()}
+                    </span>
+                  </div>
+
+                  {/* Card content */}
+                  <div className="px-5 pt-12 pb-5">
+                    {/* Name & last active */}
+                    <div className="mb-4">
+                      <h2 className="text-[17px] font-bold text-slate-900 leading-tight">{u.name}</h2>
+                      <p className="text-xs text-slate-400 mt-0.5">
+                        Last active{' '}
+                        {u.latest
+                          ? new Date(u.latest).toLocaleDateString([], { month: 'short', day: 'numeric', year: 'numeric' })
+                          : '—'}
+                      </p>
                     </div>
 
-                    <div className="grid grid-cols-3 gap-2 text-center">
-                      <div className="rounded-xl bg-slate-50 p-3">
-                        <p className="text-[10px] uppercase text-slate-400">A</p>
-                        <p className="text-base font-semibold text-slate-900">{formatValue(u.preview.a)}</p>
-                      </div>
-                      <div className="rounded-xl bg-slate-50 p-3">
-                        <p className="text-[10px] uppercase text-slate-400">V</p>
-                        <p className="text-base font-semibold text-slate-900">{formatValue(u.preview.v)}</p>
-                      </div>
-                      <div className="rounded-xl bg-slate-50 p-3">
-                        <p className="text-[10px] uppercase text-slate-400">E</p>
-                        <p className="text-base font-semibold text-slate-900">{formatValue(u.preview.e)}</p>
-                      </div>
+                    {/* Weekly avg stats */}
+                    <div className="grid grid-cols-3 gap-2 mb-4">
+                      {[
+                        { label: 'Arousal', value: u.preview.a, color: 'text-sky-600', bg: 'bg-sky-50' },
+                        { label: 'Valence', value: u.preview.v, color: 'text-orange-500', bg: 'bg-orange-50' },
+                        { label: 'Expect.', value: u.preview.e, color: 'text-violet-600', bg: 'bg-violet-50' }
+                      ].map(({ label, value, color, bg }) => (
+                        <div key={label} className={`rounded-xl ${bg} px-2 py-2.5 text-center`}>
+                          <p className={`text-sm font-bold ${color}`}>{formatValue(value)}</p>
+                          <p className="text-[9px] uppercase tracking-wide text-slate-400 mt-0.5">{label}</p>
+                        </div>
+                      ))}
+                    </div>
+
+                    {/* CTA row */}
+                    <div className="flex items-center justify-between rounded-2xl bg-slate-50 px-4 py-2.5 transition-colors duration-200 group-hover:bg-indigo-50">
+                      <span className="text-xs font-semibold text-slate-500 group-hover:text-indigo-600 transition-colors">
+                        View Analytics
+                      </span>
+                      <span className="text-slate-300 group-hover:text-indigo-400 transition-all duration-200 group-hover:translate-x-0.5">
+                        →
+                      </span>
                     </div>
                   </div>
                 </button>
               ))}
             </div>
-          </section>
+          </>
         )}
 
         {stage === 'dashboard' && (
