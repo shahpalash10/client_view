@@ -267,28 +267,29 @@ export default function App() {
   }
 
   return (
-    <div className={stage === 'profiles' ? 'min-h-screen bg-gradient-to-br from-slate-50 via-white to-indigo-50/30 p-8' : 'min-h-screen bg-gradient-to-b from-white to-slate-100 p-4 md:p-8'}>
+    <div className={stage === 'profiles' ? 'profiles-page' : 'min-h-screen bg-gradient-to-b from-white to-slate-100 p-4 md:p-8'}>
       {stage === 'profiles' && (
-        <section className="relative mx-auto w-full max-w-6xl px-2 pb-12">
-          <div className="relative overflow-hidden rounded-[40px] bg-gradient-to-br from-sky-600 via-indigo-600 to-cyan-500 px-8 py-10 text-white shadow-[0_25px_80px_rgba(14,37,102,0.28)]">
-            <div className="relative z-10 mx-auto max-w-3xl space-y-4 text-center md:text-left">
-              <p className="text-[0.7rem] uppercase tracking-[0.55em] text-white/70">Client Repository</p>
-              <h1 className="text-[clamp(2.25rem,4vw,3.5rem)] font-semibold leading-tight text-white">
-                Immersive Emotion Profiles
-              </h1>
-              <p className="text-base text-white/80">
-                Face + voice mood snapshots, one tap away.
-              </p>
-            </div>
+        <section className="profiles-layout">
 
-            <div className="pointer-events-none">
-              <div className="hero-bubble hero-bubble--one" />
-              <div className="hero-bubble hero-bubble--two" />
-              <div className="hero-bubble hero-bubble--three" />
+          {/* ── Hero ─────────────────────────────────── */}
+          <header className="profiles-hero">
+            <div className="profiles-hero__inner">
+              <span className="profiles-hero__badge">Client Repository</span>
+              <h1 className="profiles-hero__title">Emotion Intelligence<br />Repository</h1>
+              <p className="profiles-hero__sub">Real-time face &amp; voice mood snapshots across all active profiles.</p>
+              <div className="profiles-hero__meta">
+                <span className="profiles-hero__meta-dot" />
+                <span>{users.length} profile{users.length !== 1 ? 's' : ''} tracked</span>
+                <span className="profiles-hero__meta-sep" />
+                <span>{users.reduce((s, u) => s + u.count, 0)} total sessions</span>
+              </div>
             </div>
-          </div>
+            <div className="profiles-hero__orb profiles-hero__orb--a" />
+            <div className="profiles-hero__orb profiles-hero__orb--b" />
+          </header>
 
-          <div className="relative -mt-10 flex flex-wrap justify-center gap-8 rounded-[40px] bg-white/70 px-2 pb-6 pt-16 shadow-[0_35px_80px_rgba(15,23,42,0.15)] backdrop-blur">
+          {/* ── Grid ─────────────────────────────────── */}
+          <div className="profiles-grid">
             {users.map((u, idx) => (
               <button
                 key={u.userId}
@@ -297,40 +298,44 @@ export default function App() {
                   setSelectedUser(u.userId)
                   setStage('dashboard')
                 }}
-                className="profile-card group relative w-full max-w-sm overflow-hidden rounded-[32px] border border-white/40 bg-white/90 text-left shadow-[0_30px_60px_rgba(15,23,42,0.14)] transition-all hover:-translate-y-2 hover:border-cyan-200 hover:shadow-[0_35px_90px_rgba(15,23,42,0.2)]"
-                style={{ animationDelay: `${idx * 60}ms` }}
+                className="pcard"
+                style={{ '--delay': `${idx * 55}ms` }}
               >
-                <div className={`h-40 bg-gradient-to-r ${profileColors[idx % profileColors.length]} relative overflow-hidden`}> 
-                  <span className="absolute inset-0 bg-[radial-gradient(circle_at_top,rgba(255,255,255,0.35),transparent_55%)]" />
-                  <span className="absolute -bottom-4 right-4 h-16 w-16 rounded-full bg-white/30 blur-2xl" />
+                {/* colour swatch */}
+                <div className={`pcard__swatch bg-gradient-to-br ${profileColors[idx % profileColors.length]}`}>
+                  <span className="pcard__swatch-shine" />
+                  <span className="pcard__initials">{u.name.charAt(0).toUpperCase()}</span>
                 </div>
-                <div className="space-y-4 p-6">
-                  <div className="flex items-center justify-between">
+
+                {/* body */}
+                <div className="pcard__body">
+                  <div className="pcard__header">
                     <div>
-                      <h2 className="text-2xl font-semibold text-slate-900">{u.name}</h2>
-                      <p className="text-sm text-slate-500">{u.count} total sessions</p>
+                      <h2 className="pcard__name">{u.name}</h2>
+                      <p className="pcard__sessions">{u.count} session{u.count !== 1 ? 's' : ''}</p>
                     </div>
-                    <span className="rounded-full bg-slate-100 px-3 py-1 text-xs font-medium text-slate-600">Open</span>
+                    <span className="pcard__open-chip">Open →</span>
                   </div>
-                  <div className="grid grid-cols-3 gap-3 text-center text-sm font-semibold text-slate-900">
-                    <div className="rounded-2xl bg-sky-50/90 p-3">
-                      <p className="text-xs font-medium text-slate-500">Arousal</p>
-                      <p className="text-lg">{formatValue(u.preview.a)}</p>
+
+                  <div className="pcard__metrics">
+                    <div className="pcard__metric pcard__metric--arousal">
+                      <span className="pcard__metric-label">Arousal</span>
+                      <span className="pcard__metric-value">{formatValue(u.preview.a)}</span>
                     </div>
-                    <div className="rounded-2xl bg-amber-50/90 p-3">
-                      <p className="text-xs font-medium text-slate-500">Valence</p>
-                      <p className="text-lg">{formatValue(u.preview.v)}</p>
+                    <div className="pcard__metric pcard__metric--valence">
+                      <span className="pcard__metric-label">Valence</span>
+                      <span className="pcard__metric-value">{formatValue(u.preview.v)}</span>
                     </div>
-                    <div className="rounded-2xl bg-violet-50/90 p-3">
-                      <p className="text-xs font-medium text-slate-500">Expectation</p>
-                      <p className="text-lg">{formatValue(u.preview.e)}</p>
+                    <div className="pcard__metric pcard__metric--expect">
+                      <span className="pcard__metric-label">Expect.</span>
+                      <span className="pcard__metric-value">{formatValue(u.preview.e)}</span>
                     </div>
                   </div>
-                  <div className="flex items-center justify-between text-xs text-slate-400">
+
+                  <div className="pcard__footer">
                     <span>Updated {u.latest ? new Date(u.latest).toLocaleDateString() : '—'}</span>
-                    <span className="flex items-center gap-1 text-slate-500">
-                      <span className="inline-block h-1.5 w-1.5 rounded-full bg-emerald-400" />
-                      Pipeline ready
+                    <span className="pcard__live">
+                      <span className="pcard__live-dot" />Pipeline ready
                     </span>
                   </div>
                 </div>
